@@ -1,0 +1,128 @@
+/* Grove Clash — js/audio.js
+   Sfx: 100% procedural WebAudio sound effects (no audio files).
+   The AudioContext is created lazily on the first user gesture
+   (autoplay policy safe, works from file://). M toggles mute. */
+const Sfx = (() => {
+  let ctx = null, master = null, noiseBuf = null;
+  let muted = false, ambTimer = null;
+
+  function unlock() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = muted ? 0 : 0.45;
+    master.connect(ctx.destination);
+    // 1 second of white noise, reused by every noise-based effect
+    const n = ctx.sampleRate;
+    noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    startAmbience();
+  }
+
+  // ---- tiny synth helpers ----
+  function tone(o) {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + (o.delay || 0);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = o.type || 'square';
+    osc.frequency.setValueAtTime(o.f0, t0);
+    if (o.f1 && o.f1 !== o.f0)
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t0 + o.dur);
+    const v = o.vol || 0.15;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(v, t0 + (o.attack || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0 + o.dur + 0.05);
+  }
+
+  function noise(o) {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + (o.delay || 0);
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = o.ftype || 'lowpass';
+    f.frequency.setValueAtTime(o.f0 || 1000, t0);
+    if (o.f1) f.frequency.exponentialRampToValueAtTime(Math.max(10, o.f1), t0 + o.dur);
+    f.Q.value = o.q || 0.8;
+    const g = ctx.createGain();
+    const v = o.vol || 0.2;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(v, t0 + (o.attack || 0.008));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + o.dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t0); src.stop(t0 + o.dur + 0.05);
+  }
+
+  // ---- named effects ----
+  const FX = {
+    blip:    () => tone({ f0: 620, f1: 580, dur: 0.035, vol: 0.05 }),
+    cursor:  () => tone({ f0: 700, f1: 660, dur: 0.05, vol: 0.08 }),
+    confirm: () => { tone({ f0: 540, dur: 0.06, vol: 0.1 }); tone({ f0: 810, dur: 0.09, vol: 0.1, delay: 0.06 }); },
+    buzz:    () => { tone({ f0: 120, f1: 90, dur: 0.16, vol: 0.14, type: 'sawtooth' }); },
+    whoosh:  () => noise({ f0: 400, f1: 3400, dur: 0.16, vol: 0.22, ftype: 'bandpass', q: 1.2 }),
+    impact:  () => {
+      noise({ f0: 900, f1: 120, dur: 0.2, vol: 0.5 });
+      tone({ f0: 95, f1: 38, dur: 0.18, vol: 0.35, type: 'sine' });
+    },
+    thud:    () => { noise({ f0: 500, f1: 100, dur: 0.12, vol: 0.3 }); },
+    charge:  () => tone({ f0: 190, f1: 920, dur: 0.45, vol: 0.12, type: 'sine' }),
+    beam:    () => {
+      tone({ f0: 880, f1: 360, dur: 0.5, vol: 0.13, type: 'sawtooth' });
+      tone({ f0: 905, f1: 350, dur: 0.5, vol: 0.1, type: 'square' });
+    },
+    zap:     () => tone({ f0: 1400, f1: 220, dur: 0.14, vol: 0.16, type: 'square' }),
+    growl:   () => tone({ f0: 360, f1: 110, dur: 0.5, vol: 0.2, type: 'sawtooth' }),
+    sizzle:  () => noise({ f0: 2400, f1: 4200, dur: 0.28, vol: 0.12, ftype: 'highpass' }),
+    boom:    () => {
+      noise({ f0: 700, f1: 60, dur: 0.45, vol: 0.6 });
+      tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
+    },
+    faint:   () => tone({ f0: 600, f1: 70, dur: 0.7, vol: 0.2, type: 'square' }),
+    spawn:   () => { noise({ f0: 800, f1: 2600, dur: 0.18, vol: 0.14, ftype: 'bandpass' }); tone({ f0: 420, f1: 860, dur: 0.18, vol: 0.1 }); },
+    victory: () => {
+      const seq = [523, 523, 523, 659, 784, 1047];
+      seq.forEach((f, i) => tone({ f0: f, dur: i === seq.length - 1 ? 0.34 : 0.11, vol: 0.13, delay: i * 0.12 }));
+    },
+    defeat:  () => {
+      [392, 330, 262, 196].forEach((f, i) => tone({ f0: f, dur: 0.2, vol: 0.13, delay: i * 0.18, type: 'square' }));
+    },
+    step:    () => noise({ f0: 700, f1: 250, dur: 0.05, vol: 0.04 }),
+  };
+
+  // soft night-forest bed: filtered noise pad + scheduled cricket chirps
+  function startAmbience() {
+    if (!ctx) return;
+    const pad = ctx.createBufferSource();
+    pad.buffer = noiseBuf; pad.loop = true;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 320;
+    const g = ctx.createGain(); g.gain.value = 0.018;
+    pad.connect(lp); lp.connect(g); g.connect(master);
+    pad.start();
+    const chirp = () => {
+      if (!ctx) return;
+      for (let i = 0; i < 3; i++)
+        tone({ f0: 4200 + Math.random() * 600, dur: 0.03, vol: 0.012, delay: i * 0.07, type: 'sine' });
+      ambTimer = setTimeout(chirp, 900 + Math.random() * 2200);
+    };
+    ambTimer = setTimeout(chirp, 1200);
+  }
+
+  return {
+    unlock,
+    play: (name) => { if (ctx && FX[name]) FX[name](); },
+    toggleMute: () => {
+      muted = !muted;
+      if (master) master.gain.value = muted ? 0 : 0.45;
+      return muted;
+    },
+    isMuted: () => muted,
+    ready: () => !!ctx,
+  };
+})();
