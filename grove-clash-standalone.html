@@ -2503,18 +2503,75 @@ const Battle = (() => {
     backToMenu();
   }
 
+  // ------------------------------------------------------ spawn-in anim
+  const SPAWN_THEMES = {
+    P: [[1, 1, 1], [1, 0.55, 0.8], [0.7, 0.9, 1]],
+    E: [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
+  };
+
+  /* Materialize a creature: converging light spiral, white-hot scale-up
+     from the ground with overshoot, silhouette glints, touchdown ring. */
+  function* spawnIn(a, theme) {
+    const base = a.pos;
+    Sfx.play('charge');
+    // converging spiral of light around the spawn point
+    for (let i = 0; i < 20; i++) {
+      const ang = i * 1.05, r = 1.25 - i * 0.035;
+      const px = base[0] + Math.cos(ang) * r;
+      const pz = base[2] + Math.sin(ang) * r;
+      Fx.spawn({
+        p: [px, base[1] + 0.1 + i * 0.05, pz],
+        c: theme[i % theme.length],
+        v: [(base[0] - px) * 3.2, 0.4, (base[2] - pz) * 3.2],
+        life: 0.3, s: 0.05, s1: 0.012,
+      });
+      if (i % 5 === 4) yield 55;
+    }
+    yield 90;
+    // appear white-hot and grow from the feet up (origin is bottom-center)
+    a.visible = true;
+    a.flashT = 0.55; // holds full white, then "develops" into color
+    a.scl[0] = a.scl[1] = a.scl[2] = 0.02;
+    tw3(a.scl, [1, 1, 1], 520, 'outBack');
+    Sfx.play('spawn');
+    Cam.kickFov(-2.5, 320);
+    Fx.addTrauma(0.12);
+    // glints shimmering across the voxel silhouette
+    const m = M3.trs(M3.mat(), a.pos, [a.yaw, 0, 0], [1, 1, 1]);
+    const cs = a.centers;
+    const step = Math.max(1, Math.floor(cs.length / 36));
+    const tmp = [0, 0, 0];
+    for (let i = 0; i < cs.length; i += step) {
+      M3.transformPoint(tmp, m, cs[i].p);
+      Fx.spawn({
+        p: [tmp[0], tmp[1], tmp[2]],
+        c: theme[((i / step) | 0) % theme.length],
+        v: [(Math.random() - 0.5) * 0.7, 0.35 + Math.random() * 0.5, (Math.random() - 0.5) * 0.7],
+        g: -0.6, drag: 0.5, life: 0.5 + Math.random() * 0.25, s: 0.045, s1: 0.008,
+      });
+    }
+    yield 240;
+    // touchdown: ground ring + dust kick
+    Fx.ring([base[0], 0.06, base[2]], {
+      r0: 0.18, r1: 0.95, n: 16, life: 0.42,
+      colors: [[1, 1, 1], theme[1]], s: 0.05,
+    });
+    Fx.burst([base[0], 0.1, base[2]], {
+      n: 12, speed: 1.5, up: 1.1, g: -5, drag: 2,
+      colors: [theme[1], [0.45, 0.4, 0.34], [0.6, 0.55, 0.45]], life: 0.45, s: 0.05,
+    });
+    yield 330;
+  }
+
   function* introScript() {
     yield 650; // let the transition reveal finish before the first message
     yield* say(BData.MSG.intro1);
-    enemy.visible = true;
-    Fx.burst(chest(enemy), { n: 22, speed: 2.4, colors: [[1, 1, 1], [0.9, 0.95, 1], [1, 0.85, 0.5]], life: 0.5 });
-    Sfx.play('spawn');
-    yield* say(BData.MSG.intro2, { auto: true });
+    yield* say(BData.MSG.intro2, { auto: true, hold: 120 });
+    yield* spawnIn(enemy, SPAWN_THEMES.E);
+    yield 150;
+    yield* say(BData.MSG.intro3, { auto: true, hold: 120 });
+    yield* spawnIn(player, SPAWN_THEMES.P);
     yield 200;
-    player.visible = true;
-    Fx.burst(chest(player), { n: 22, speed: 2.4, colors: [[1, 1, 1], [1, 0.55, 0.8], [0.7, 0.9, 1]], life: 0.5 });
-    Sfx.play('spawn');
-    yield* say(BData.MSG.intro3, { auto: true });
     backToMenu();
   }
 
