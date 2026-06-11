@@ -1,6 +1,16 @@
-run = "python3 -m http.server 8000 --bind 0.0.0.0"
+# Grove Clash — Replit configuration.
+# `modules` makes python3 exist inside a blank Repl's run environment
+# (without it, "python3: command not found" is the usual failure).
+# start.sh falls back to `python` or `node` on other setups.
+modules = ["python-3.11"]
+run = "sh start.sh"
 entrypoint = "index.html"
+hidden = [".git"]
 
 [[ports]]
 localPort = 8000
 externalPort = 80
+
+[deployment]
+deploymentTarget = "static"
+publicDir = "/"

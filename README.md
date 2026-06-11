@@ -13,15 +13,46 @@ text-driven turn system (PP, stat stages, crits, misses).
 
 ## Run it
 
-**On Replit (empty project, no template):** add these files to the repl
-and press **Run** — the included `.replit` serves the folder with
-`python3 -m http.server 8000` and the webview opens the game.
-If `.replit` is ignored on your plan, just set the run command to
-`python3 -m http.server 8000 --bind 0.0.0.0` yourself.
+### On Replit
 
-**Anywhere else:** serve the folder with any static server
-(`python3 -m http.server`) **or simply open `index.html` in a
-browser** — the game is `file://`-safe (no ES modules, no fetch).
+**Easiest — import from GitHub:** Create Repl → *Import from GitHub* →
+pick this repository. The hidden `.replit` file comes along, so the
+green **Run** button just works (it launches `start.sh`, which serves
+the folder on port 8000 and Replit opens the webview).
+
+**Blank Repl with files added by hand:** make sure the **hidden files**
+came along — in the Files pane menu choose *Show hidden files* and
+check that `.replit` and `start.sh` exist. The usual reason the Run
+button "does nothing" on a blank Repl is one of these:
+
+1. `.replit` was never copied (it's hidden), so Replit has no run
+   command. Fix: copy it in, or set the run command to `sh start.sh`.
+2. `.replit` lacked a `modules` line, so the run environment has **no
+   Python** and `python3 ...` fails with *command not found*. This
+   repo's `.replit` now declares `modules = ["python-3.11"]`, and
+   `start.sh` additionally falls back to `python` or `node`.
+3. The Repl needs a reload after `.replit` changes — close and reopen
+   the tab (or use *kill* in the shell) so the new config is picked up.
+
+**No config at all (always works):** open the Replit **Shell** tab and
+run `sh start.sh` — then open the webview/preview on port 8000.
+
+> The game is keyboard-driven: **click the game once** in the webview
+> so it has keyboard focus.
+
+### The one-file version (no server, no setup)
+
+`grove-clash-standalone.html` is the **entire game in a single file**.
+Download it / upload it anywhere / double-click it — it runs straight
+from disk in any browser. Rebuild it after code changes with
+`python3 tools/build_standalone.py`.
+
+### Anywhere else
+
+Serve the folder with any static server (`python3 serve.py`,
+`node serve.js`, or `python3 -m http.server`) **or simply open
+`index.html` in a browser** — the game is `file://`-safe (no ES
+modules, no fetch).
 
 ## Controls
 
