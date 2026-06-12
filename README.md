@@ -7,9 +7,20 @@ files. Everything (models, font, UI, sound) is generated procedurally
 in vanilla JavaScript, so it runs on a completely empty Replit project.
 
 Walk the forest clearing as the trainer, talk to **Camper REX**, and
-battle his **MAGMULE** (Lv.15) with your **PIXLIT** (Lv.10): dynamic
-camera swings, screen shake, hitstop, particle bursts and a classic
-text-driven turn system (PP, stat stages, crits, misses).
+battle his **MAGMULE** (Lv.15) with your party — **PIXLIT** (Lv.10),
+**THORNLET** and **EMBERIK** (Lv.9): dynamic camera swings, screen
+shake, hitstop, particle bursts and a classic text-driven turn system
+(PP, stat stages, crits, misses).
+
+Battles are always 1v1, but you command a **party of up to six
+allies**: switch freely mid-battle (a switch uses your turn), and when
+an ally faints you pick the next one to send in. The command menu has
+four slots — **Items** (Heal restores 50% HP, Cure wipes stat debuffs
+like Growl; 3 charges each per battle), **Capture** (hurl a Voxball;
+odds rise the more hurt the target is — caught monsters join your
+party), **Run** (slip away and try again later) and **Attack** (the
+four-move grid). Every action gets its own camera move and effect
+choreography. Blacking out fully heals the party.
 
 ## Run it
 
@@ -58,15 +69,16 @@ modules, no fetch).
 
 | Key | Action |
 |---|---|
-| WASD / Arrows | Move (overworld) · move cursor (battle menu) |
+| WASD / Arrows | Move (overworld) · move cursor (battle menus) |
 | E / Space / Enter | Talk · confirm · advance text |
-| X / Esc | Back (try fleeing — see what REX thinks) |
+| X / Esc | Back out of a submenu |
+| C | Open the party panel (switch allies) |
 | M | Mute / unmute |
-| Mouse | Click move buttons, click to advance text |
+| Mouse | Click buttons/party rows, click to advance text |
 
-Lose and you black out (HP restored); win and REX will want a rematch.
-Your first fight starts at 17/28 HP — it is winnable, but barely. A
-rematch at full HP is a fair fight.
+Lose and you black out (party fully healed); win, run, or capture and
+REX will want a rematch. PIXLIT starts its first fight at 17/28 HP —
+lean on your bench.
 
 ## Debug modes (URL hash)
 

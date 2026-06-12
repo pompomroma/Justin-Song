@@ -1,22 +1,48 @@
 /* Grove Clash — js/battle_data.js
    BData: species/move tables, stat & damage formulas, stat stages,
-   enemy AI and every battle message string. Pure (Node-safe) so the
-   smoke test can run damage goldens and Monte-Carlo battle sims. */
+   items, capture odds, enemy AI and every battle message string.
+   Pure (Node-safe) so the smoke test can run damage goldens and
+   Monte-Carlo battle sims. */
 const BData = (() => {
 
   const SPECIES = {
-    PIXLIT:  { name: 'PIXLIT',  base: { hp: 40, atk: 75, def: 60, spe: 40 },
-               moves: ['TACKLE', 'GROWL', 'MINDBEAM', 'PSYBLAST'] },
-    MAGMULE: { name: 'MAGMULE', base: { hp: 52, atk: 32, def: 42, spe: 35 },
-               moves: ['TACKLE', 'CINDER', 'GROWL'] },
+    PIXLIT:   { name: 'PIXLIT',   base: { hp: 40, atk: 75, def: 60, spe: 40 },
+                moves: ['TACKLE', 'GROWL', 'MINDBEAM', 'PSYBLAST'],
+                ppInit: [35, 30, 16, 20] }, // worn from the journey (matches the reference shot)
+    THORNLET: { name: 'THORNLET', base: { hp: 45, atk: 55, def: 65, spe: 35 },
+                moves: ['TACKLE', 'GROWL', 'LEAFRAZOR', 'SEEDBURST'] },
+    EMBERIK:  { name: 'EMBERIK',  base: { hp: 42, atk: 68, def: 48, spe: 50 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
+    MAGMULE:  { name: 'MAGMULE',  base: { hp: 52, atk: 32, def: 42, spe: 35 },
+                moves: ['TACKLE', 'CINDER', 'GROWL'] },
   };
 
+  /* anim kinds (battle.js dispatch): dash | rings | beam | orb | volley.
+     fx = particle color theme for the move's effects. */
+  const W = [1, 1, 1];
   const MOVES = {
-    TACKLE:   { name: 'Tackle',   type: 'NORMAL', power: 40, acc: 100, pp: 35 },
-    GROWL:    { name: 'Growl',    type: 'NORMAL', power: 0,  acc: 100, pp: 30, effect: 'atkDown' },
-    MINDBEAM: { name: 'Mindbeam', type: 'PSY',    power: 50, acc: 100, pp: 20 },
-    PSYBLAST: { name: 'Psyblast', type: 'PSY',    power: 75, acc: 90,  pp: 20 },
-    CINDER:   { name: 'Cinder',   type: 'FIRE',   power: 30, acc: 95,  pp: 25 },
+    TACKLE:    { name: 'Tackle',    type: 'NORMAL', power: 40, acc: 100, pp: 35,
+                 anim: 'dash',   fx: [W, [0.95, 0.85, 0.55]] },
+    GROWL:     { name: 'Growl',     type: 'NORMAL', power: 0,  acc: 100, pp: 30, effect: 'atkDown',
+                 anim: 'rings',  fx: [W, [1, 0.55, 0.75]] },
+    MINDBEAM:  { name: 'Mindbeam',  type: 'PSY',    power: 50, acc: 100, pp: 20,
+                 anim: 'beam',   fx: [[1, 0.4, 0.8], W, [0.78, 0.49, 1]] },
+    PSYBLAST:  { name: 'Psyblast',  type: 'PSY',    power: 75, acc: 90,  pp: 20,
+                 anim: 'orb',    fx: [[1, 0.4, 0.8], W, [0.78, 0.49, 1], [1, 0.8, 0.95]] },
+    CINDER:    { name: 'Cinder',    type: 'FIRE',   power: 30, acc: 95,  pp: 25,
+                 anim: 'volley', fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.9, 0.25, 0.1]] },
+    SCORCH:    { name: 'Scorch',    type: 'FIRE',   power: 70, acc: 90,  pp: 15,
+                 anim: 'orb',    fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [1, 1, 0.8]] },
+    LEAFRAZOR: { name: 'Leafrazor', type: 'LEAF',   power: 55, acc: 100, pp: 20,
+                 anim: 'beam',   fx: [[0.55, 0.95, 0.4], W, [0.3, 0.75, 0.3]] },
+    SEEDBURST: { name: 'Seedburst', type: 'LEAF',   power: 70, acc: 90,  pp: 15,
+                 anim: 'volley', fx: [[0.55, 0.95, 0.4], [0.85, 0.7, 0.3], [0.3, 0.75, 0.3]] },
+  };
+
+  // battle items: 3 charges of each per battle
+  const ITEMS = {
+    heal: { name: 'Heal', uses: 3, healFrac: 0.5 },
+    cure: { name: 'Cure', uses: 3 },
   };
 
   function statsFor(speciesId, level) {
@@ -49,6 +75,9 @@ const BData = (() => {
     return { dmg: Math.max(1, Math.floor(base)), crit, miss: false };
   }
 
+  // capture odds scale with how hurt the target is
+  const captureChance = (hpFrac) => M3.clamp(0.25 + 0.65 * (1 - hpFrac), 0.05, 0.95);
+
   /* enemy move choice. ai: {atkStage (its own), foeHpFrac, pp: {moveId: n}} */
   function aiPick(ai, rng) {
     const w = [];
@@ -67,19 +96,29 @@ const BData = (() => {
   const MSG = {
     intro1: 'Camper REX would like to battle!',
     intro2: 'Camper REX sent out MAGMULE!',
-    intro3: 'Go! PIXLIT!',
-    menu: 'What will PIXLIT do?',
+    go: 'Go! {A}!',
+    comeBack: '{A}, come back!',
     used: '{A} used {M}!',
     miss: "{A}'s attack missed!",
     crit: 'A critical hit!',
     atkFell: "{A}'s Attack fell!",
     atkFloor: "{A}'s Attack won't go any lower!",
     noPp: "There's no PP left for this move!",
-    noFlee: "No! There's no running from a trainer battle!",
+    usedItem: 'You used a {M}!',
+    healUsed: "{A}'s HP was restored!",
+    cureUsed: "{A}'s stats returned to normal!",
+    noneLeft: 'There are none left!',
+    threwBall: 'You hurled a Voxball at {A}!',
+    caught: 'Gotcha! {A} was caught!',
+    joined: '{A} joined your party!',
+    broke: 'Oh no! {A} broke free!',
+    partyFull: 'Your party is full!',
+    fled: 'You got away safely!',
+    choose: 'Choose your next ally!',
     faint: '{A} fainted!',
     win1: 'You defeated Camper REX!',
-    win2: 'REX: Whoa! Your PIXLIT is scrappier than it looks!',
-    win3: 'PIXLIT gained 135 EXP. Points!',
+    win2: 'REX: Whoa! Your team is scrappier than it looks!',
+    win3: '{A} gained 135 EXP. Points!',
     lose1: 'You have no creatures that can fight!',
     lose2: 'You blacked out!',
   };
@@ -101,5 +140,5 @@ const BData = (() => {
     ],
   };
 
-  return { SPECIES, MOVES, statsFor, stageMul, damage, aiPick, MSG, fmt, DIALOGUE };
+  return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick, MSG, fmt, DIALOGUE };
 })();

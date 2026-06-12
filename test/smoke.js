@@ -85,7 +85,9 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   strings.push('Lv.10', 'Lv.15', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
                'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'E  Talk',
                'MODEL VIEWER  (Left/Right to cycle)', '0123456789',
-               'FLY MODE: WASD move, IJKL look, R/F up/down, Shift fast', 'P: print camera pose');
+               'FLY MODE: WASD move, IJKL look, R/F up/down, Shift fast', 'P: print camera pose',
+               'Items', 'Capture', 'Run', 'Attack', 'Heal', 'Cure', 'Back', 'x3',
+               'C: Party', 'PARTY', 'FNT', 'IN BATTLE', 'Pick a healthy ally!', 'E: switch   X: back');
   const missing = new Set();
   for (const s of strings)
     for (const ch of s)
@@ -106,6 +108,16 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
 
   ok(near(BData.stageMul(0), 1) && near(BData.stageMul(-1), 2 / 3) &&
      near(BData.stageMul(-6), 0.25) && near(BData.stageMul(2), 2), 'stage multipliers');
+
+  for (const id of ['THORNLET', 'EMBERIK']) {
+    const s = BData.statsFor(id, 9);
+    ok(s.maxHp > 15 && s.atk > 5 && s.def > 5 && s.spe > 5, id + ' Lv.9 stats sane (' + s.maxHp + ' HP)');
+    for (const mv of BData.SPECIES[id].moves)
+      ok(!!BData.MOVES[mv] && !!BData.MOVES[mv].anim, id + ' move ' + mv + ' exists with an anim kind');
+  }
+  ok(near(BData.captureChance(1), 0.25) && near(BData.captureChance(0), 0.9) &&
+     BData.captureChance(0.5) > 0.25 && BData.captureChance(0.5) < 0.9, 'capture odds scale with damage');
+  ok(BData.ITEMS.heal.uses === 3 && BData.ITEMS.cure.uses === 3, 'items carry 3 charges each');
 
   const mkRng = (seq) => { let i = 0; return () => (i < seq.length ? seq[i++] : seq[seq.length - 1]); };
 

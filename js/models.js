@@ -102,6 +102,78 @@ const Models = (() => {
     return { g, colors, s: 0.072, jitter: 0.06 };
   }
 
+  // THORNLET — sturdy little seed-bud: mossy bulb body, dark leaf cap,
+  // sprout on top. Faces +z. ~0.8u tall.
+  function thornlet() {
+    const g = Vox.grid(13, 15, 12);
+    const C = { body: 0, belly: 1, cap: 2, capD: 3, sprout: 4, eye: 5, foot: 6 };
+    const colors = pal('#8cc85a', '#a8d878', '#3e7a32', '#2c5a24', '#57944a', '#2e2620', '#6aa83e');
+    g.ellipsoid(6, 5, 5.5, 4.6, 4.6, 4.4, C.body);
+    g.ellipsoid(6, 4, 7.5, 2.6, 2.4, 2.2, C.belly);     // belly patch
+    // leaf cap dome with drooping tips
+    for (let z = 0; z < 12; z++)
+      for (let y = 6; y < 15; y++)
+        for (let x = 0; x < 13; x++)
+          if (g.get(x, y, z) && y >= 8) g.set(x, y, z, C.cap);
+    for (const [x, z] of [[1, 5], [11, 5], [6, 1]]) {
+      g.set(x, 7, z, C.capD); g.set(x, 6, z, C.capD);
+    }
+    // sprout
+    g.box(6, 10, 5, 6, 12, 5, C.sprout);
+    g.set(5, 12, 5, C.sprout); g.set(7, 12, 5, C.sprout);
+    g.set(6, 13, 5, C.sprout);
+    // feet nubs
+    g.box(3, 0, 4, 4, 0, 6, C.foot);
+    g.box(8, 0, 4, 9, 0, 6, C.foot);
+    g.mirrorX();
+    g.set(4, 6, 9, C.eye); g.set(8, 6, 9, C.eye);
+    return { g, colors, s: 0.06, jitter: 0.07 };
+  }
+
+  // EMBERIK — quick fire fox-rat: ember-orange coat, cream belly,
+  // pointy ears, flame-tipped tail. Faces +z. ~0.75u tall.
+  function emberik() {
+    const g = Vox.grid(13, 14, 17);
+    const C = { coat: 0, belly: 1, paw: 2, flameY: 3, flameO: 4, eye: 5, ear: 6 };
+    const colors = pal('#e06428', '#f2d8a8', '#6e3a1c', '#f8c838', '#f08030', '#2e2620', '#a8431a');
+    // body + chest
+    g.ellipsoid(6, 4.5, 7, 3.8, 3.2, 4.8, C.coat);
+    g.ellipsoid(6, 4, 10.5, 3, 2.6, 2.6, C.coat);
+    for (let z = 8; z <= 13; z++)
+      for (let x = 4; x <= 8; x++)
+        for (let y = 1; y <= 3; y++)
+          if (g.get(x, y, z)) g.set(x, y, z, C.belly);
+    // head
+    g.box(4, 6, 11, 8, 9, 14, C.coat);
+    g.box(5, 6, 14, 7, 7, 14, C.belly);                  // muzzle
+    g.set(4, 10, 12, C.ear); g.set(4, 11, 12, C.ear);    // ears (mirrored)
+    g.set(5, 10, 12, C.coat);
+    // legs
+    for (const z of [4, 10]) { g.box(4, 0, z, 5, 1, z + 1, C.paw); g.box(8, 0, z, 9, 0, z + 1, C.paw); }
+    // tail rising behind with flame tip
+    g.box(6, 4, 1, 6, 6, 2, C.coat);
+    g.box(6, 7, 1, 6, 8, 1, C.flameO);
+    g.set(6, 9, 1, C.flameY); g.set(5, 8, 1, C.flameY);
+    g.mirrorX();
+    g.set(5, 8, 14, C.eye); g.set(7, 8, 14, C.eye);
+    return { g, colors, s: 0.058, jitter: 0.07 };
+  }
+
+  // Voxball — the capture ball (red top, white bottom, dark band).
+  function ball() {
+    const g = Vox.grid(7, 7, 7);
+    const C = { red: 0, white: 1, band: 2, btn: 3 };
+    const colors = pal('#e8453c', '#f2f2f6', '#26262c', '#d8f4f0');
+    g.ellipsoid(3, 3, 3, 3.1, 3.1, 3.1, C.white);
+    for (let z = 0; z < 7; z++)
+      for (let x = 0; x < 7; x++) {
+        for (let y = 4; y < 7; y++) if (g.get(x, y, z)) g.set(x, y, z, C.red);
+        if (g.get(x, 3, z)) g.set(x, 3, z, C.band);
+      }
+    g.set(3, 3, 6, C.btn);
+    return { g, colors, s: 0.052, jitter: 0.04 };
+  }
+
   // ============================================================ characters
 
   /* shared humanoid builder. cfg: {hair, skin, top, sleeve, legs, shoe, cap?}
@@ -326,7 +398,7 @@ const Models = (() => {
   // ================================================================= cache
 
   const BUILDERS = {
-    pixlit, magmule, hero, rex_idle, rex_raised,
+    pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,

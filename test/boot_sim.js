@@ -123,6 +123,20 @@ const press = (sb, code) => {
   sb.__dispatch('keyup', { code });
 };
 
+// drives one "menu step": navigate toward bottom-right (Attack/strongest
+// move) and confirm. Down/Right SET grid position (no toggling), so this
+// lands Attack in the top menu, the 4th move in the move grid, advances
+// any message on confirm, and walks the party list (wrapping) when a
+// forced switch panel is up.
+function attackCycle(sb) {
+  sb.__pump(30);
+  press(sb, 'ArrowDown');
+  sb.__pump(5);
+  press(sb, 'ArrowRight');
+  sb.__pump(5);
+  press(sb, 'Space');
+}
+
 // -------------------------------------------------- run 1: full battle
 {
   const sb = makeSandbox('#battle');
@@ -133,12 +147,10 @@ const press = (sb, code) => {
   }.toString()})()`, sb);
   sb.__pump(5);
   ok(sb.__errors.length === 0, 'battle boots without errors');
-  // play: spam confirm to advance text/menus for up to ~6 sim-minutes
+  // play: keep attacking (with forced switches) for up to ~11 sim-minutes
   let frames = 0;
-  while (frames < 22000 && !vm.runInContext('globalThis.__battleEnd', sb)) {
-    sb.__pump(40);
-    press(sb, 'Space');
-    if (frames % 400 === 0) press(sb, 'ArrowDown'); // wander the move grid
+  while (frames < 40000 && !vm.runInContext('globalThis.__battleEnd', sb)) {
+    attackCycle(sb);
     frames += 40;
   }
   ended = vm.runInContext('globalThis.__battleEnd', sb);
@@ -194,15 +206,14 @@ const press = (sb, code) => {
   // enemy only Growls -> player must eventually win -> victory path runs
   vm.runInContext(`(${function () {
     BData.aiPick = () => 'GROWL';
-    Game.save.hp = 28;
+    Game.save.party[0].hp = null; // full HP
     const orig = Game.toOverworld;
     Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
   }.toString()})()`, sb);
   sb.__pump(5);
   let frames = 0;
   while (frames < 40000 && !vm.runInContext('globalThis.__battleEnd', sb)) {
-    sb.__pump(40);
-    press(sb, 'Space');
+    attackCycle(sb);
     frames += 40;
   }
   const ended = vm.runInContext('globalThis.__battleEnd', sb);
@@ -212,6 +223,63 @@ const press = (sb, code) => {
   sb.__pump(200);
   ok(sb.__errors.length === 0, 'no errors through the victory path' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ---------------------- run 6: feature tour — heal, switch, capture
+{
+  const sb = makeSandbox('#battle');
+  vm.runInContext(`(${function () {
+    BData.captureChance = () => 1; // guaranteed catch
+    const orig = Game.toOverworld;
+    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  const phase = (keys, frames) => {
+    let f = 0;
+    while (f < frames && !vm.runInContext('globalThis.__battleEnd', sb)) {
+      sb.__pump(30);
+      for (const k of keys) { press(sb, k); sb.__pump(5); }
+      f += 40;
+    }
+  };
+  phase(['ArrowUp', 'ArrowLeft', 'Space'], 3200);   // Items -> Heal (uses charges)
+  ok(sb.__errors.length === 0, 'item (Heal) sequence without errors');
+  // ArrowUp wraps the party cursor too, but a stray press in the top menu
+  // can only land on the top row (Items/Capture) — never on Run.
+  phase(['KeyC', 'ArrowUp', 'Space'], 4000);        // party panel -> switch allies
+  ok(sb.__errors.length === 0, 'voluntary switch sequence without errors');
+  phase(['ArrowUp', 'ArrowRight', 'Space'], 12000); // Capture (rigged success)
+  const ended = vm.runInContext('globalThis.__battleEnd', sb);
+  const party = vm.runInContext('__Game.save.party.map(m => m.species).join(",")', sb);
+  ok(ended === 'capture' && /MAGMULE$/.test(party),
+     'capture path completes (' + ended + ', party=' + party + ')');
+  sb.__pump(200);
+  ok(sb.__errors.length === 0, 'no errors through heal/switch/capture tour' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ----------------------------------------------- run 7: run away
+{
+  const sb = makeSandbox('#battle');
+  vm.runInContext(`(${function () {
+    const orig = Game.toOverworld;
+    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  let frames = 0;
+  while (frames < 8000 && !vm.runInContext('globalThis.__battleEnd', sb)) {
+    sb.__pump(30);
+    press(sb, 'ArrowDown');
+    sb.__pump(5);
+    press(sb, 'ArrowLeft');
+    sb.__pump(5);
+    press(sb, 'Space');
+    frames += 40;
+  }
+  const ended = vm.runInContext('globalThis.__battleEnd', sb);
+  ok(ended === 'run', 'run-away path completes (' + ended + ')');
+  sb.__pump(200);
+  ok(sb.__errors.length === 0, 'no errors through the run-away path');
 }
 
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');

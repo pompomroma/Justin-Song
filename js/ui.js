@@ -18,6 +18,18 @@ const UI = (() => {
     NORMAL: { base: '#a8a078', hi: '#c6c09e', dark: '#6e6848' },
     PSY:    { base: '#e85590', hi: '#f883b2', dark: '#93305c' },
     FIRE:   { base: '#f08030', hi: '#f8a060', dark: '#9c4a12' },
+    LEAF:   { base: '#78b048', hi: '#9ad06e', dark: '#46702a' },
+  };
+
+  // top-level battle actions + item buttons
+  const ACTION_STYLES = {
+    ITEMS:   { base: '#c9a23f', hi: '#e2c468', dark: '#8a6b1a' },
+    CAPTURE: { base: '#38b0a8', hi: '#62cfc8', dark: '#1f6862' },
+    RUN:     { base: '#5a7fae', hi: '#82a3cc', dark: '#34507a' },
+    ATTACK:  { base: '#c8503c', hi: '#e07a64', dark: '#8c2f20' },
+    HEAL:    { base: '#58b868', hi: '#82d690', dark: '#2e7a3c' },
+    CURE:    { base: '#58a0d8', hi: '#84c0ec', dark: '#2c6694' },
+    BACK:    { base: '#8a8d96', hi: '#aab0ba', dark: '#565a64' },
   };
 
   // ---- primitives ----
@@ -203,6 +215,91 @@ const UI = (() => {
       moveButton(ctx, MOVE_RECTS[i], moves[i], i === cursor, t, moves[i].pp <= 0);
   }
 
+  /* generic action button: big centered label + optional small sub-label
+     (e.g. remaining charges). defs: [{label, sub, style, disabled}] */
+  function actionButton(ctx, r, def, sel, t) {
+    const tc = ACTION_STYLES[def.style] || ACTION_STYLES.BACK;
+    ctx.save();
+    if (sel) {
+      const s = 1 + 0.025 * Math.sin(t * 6);
+      ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+      ctx.scale(s, s);
+      ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+    }
+    const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    g.addColorStop(0, tc.hi);
+    g.addColorStop(1, tc.base);
+    para(ctx, r.x, r.y, r.w, r.h, 10);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = tc.dark; ctx.stroke();
+    if (sel) {
+      para(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 10);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(r.x + 26, r.y + r.h / 2, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.strokeStyle = tc.dark; ctx.lineWidth = 2; ctx.stroke();
+    PFont.draw(ctx, def.label, r.x + 46, r.y + (def.sub ? 8 : 16), { scale: 2, color: '#ffffff', outline: tc.dark });
+    if (def.sub)
+      PFont.draw(ctx, def.sub, r.x + r.w - 22 - PFont.width(def.sub, 2), r.y + r.h - 24,
+                 { scale: 2, color: '#ffffff', outline: '#33333a' });
+    if (def.disabled) {
+      para(ctx, r.x, r.y, r.w, r.h, 10);
+      ctx.fillStyle = 'rgba(30,30,36,0.55)'; ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function actionGrid(ctx, defs, cursor, t) {
+    for (let i = 0; i < defs.length && i < 4; i++)
+      actionButton(ctx, MOVE_RECTS[i], defs[i], i === cursor, t);
+  }
+
+  // ---- in-battle party panel ----
+
+  const PARTY_RECT = { x: 250, y: 84, w: 460, h: 348 };
+  const PARTY_ROW_RECTS = [];
+  for (let i = 0; i < 6; i++)
+    PARTY_ROW_RECTS.push({ x: PARTY_RECT.x + 14, y: PARTY_RECT.y + 46 + i * 49, w: PARTY_RECT.w - 28, h: 44 });
+
+  // clickable hotspot over the player's party ball row (opens the panel)
+  const PARTY_ROW_HOTSPOT = { x: 514, y: 356, w: 184, h: 30 };
+
+  /* rows: [{name, lv, hp, maxHp, frac, fainted, active}] */
+  function partyPanel(ctx, rows, cursor, t, forced) {
+    panel(ctx, PARTY_RECT.x, PARTY_RECT.y, PARTY_RECT.w, PARTY_RECT.h, 16);
+    PFont.draw(ctx, 'PARTY', PARTY_RECT.x + 30, PARTY_RECT.y + 14, { scale: 2, color: '#33343c', outline: null });
+    PFont.draw(ctx, forced ? 'Pick a healthy ally!' : 'E: switch   X: back',
+               PARTY_RECT.x + 150, PARTY_RECT.y + 14, { scale: 2, color: '#6b5d20', outline: null });
+    for (let i = 0; i < rows.length && i < 6; i++) {
+      const r = PARTY_ROW_RECTS[i], m = rows[i];
+      const sel = i === cursor;
+      para(ctx, r.x, r.y, r.w, r.h, 8);
+      ctx.fillStyle = m.fainted ? 'rgba(90,46,46,0.85)' : (m.active ? 'rgba(46,78,96,0.9)' : 'rgba(38,42,52,0.88)');
+      ctx.fill();
+      if (sel) {
+        para(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 8);
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
+        void t;
+      }
+      ball(ctx, r.x + 22, r.y + r.h / 2, 9, m.fainted ? 'faded' : 'full');
+      PFont.draw(ctx, m.name, r.x + 42, r.y + 6, { scale: 2 });
+      PFont.draw(ctx, 'Lv.' + m.lv, r.x + 200, r.y + 6, { scale: 2, color: '#c8ccd8' });
+      bar(ctx, r.x + 268, r.y + 10, 120, 10, m.frac, hpColor(m.frac));
+      const nums = m.hp + '/' + m.maxHp;
+      PFont.draw(ctx, nums, r.x + r.w - 14 - PFont.width(nums, 2), r.y + 25, { scale: 2, color: '#c8ccd8' });
+      if (m.fainted)
+        PFont.draw(ctx, 'FNT', r.x + 42, r.y + 25, { scale: 2, color: '#ff8a7a' });
+      else if (m.active)
+        PFont.draw(ctx, 'IN BATTLE', r.x + 42, r.y + 25, { scale: 2, color: '#7ad8f8' });
+    }
+  }
+
+  function partyHint(ctx) {
+    PFont.draw(ctx, 'C: Party', 514, 338, { scale: 2, color: '#f8e0c8', outline: '#5a2018' });
+  }
+
   // ---- info panels ----
 
   function enemyPanel(ctx, vm) {
@@ -324,9 +421,10 @@ const UI = (() => {
   }
 
   return {
-    C, TYPE_COLORS, MOVE_RECTS,
+    C, TYPE_COLORS, ACTION_STYLES, MOVE_RECTS, PARTY_ROW_RECTS, PARTY_ROW_HOTSPOT,
     para, panel, bar, ball, tealBall, hpColor,
-    redFrame, emblem, moveGrid, enemyPanel, playerPanel, playerParty,
+    redFrame, emblem, moveGrid, actionGrid, partyPanel, partyHint,
+    enemyPanel, playerPanel, playerParty,
     typewriter, msgBox, prompt, hint, locationCard,
   };
 })();

@@ -90,7 +90,7 @@ const Overworld = (() => {
       hero = { pos: SPAWN.slice(), yaw: Math.atan2(-SPAWN[0], -SPAWN[2]), h: Game.handle('hero'), height: m.height };
     }
     rexActor = { pos: REX_POS.slice(), yaw: Math.atan2(-REX_POS[0], -REX_POS[2]), h: Game.handle('rex_idle') };
-    if (params.result === 'win') {
+    if (params.result === 'win' || params.result === 'capture' || params.result === 'run') {
       M3.set(hero.pos, 2.0, 0, 0.2);
       hero.yaw = Math.atan2(REX_POS[0] - 2.0, REX_POS[2] - 0.2);
     } else if (params.result === 'loss') {

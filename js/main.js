@@ -16,7 +16,16 @@ const Game = (() => {
   let viewRect = { left: 0, top: 0, w: 1, h: 1 };
   const handles = {};
 
-  const save = { hp: 17, beaten: false, battles: 0 };
+  // hp: null means "full HP" (resolved against statsFor at battle start)
+  const save = {
+    party: [
+      { species: 'PIXLIT', level: 10, hp: 17 }, // worn from the journey
+      { species: 'THORNLET', level: 9, hp: null },
+      { species: 'EMBERIK', level: 9, hp: null },
+    ],
+    beaten: false,
+    battles: 0,
+  };
 
   function handle(name) {
     if (!handles[name]) handles[name] = Gfx.upload(Models.get(name));

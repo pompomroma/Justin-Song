@@ -84,6 +84,15 @@ const Sfx = (() => {
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
     },
     faint:   () => tone({ f0: 600, f1: 70, dur: 0.7, vol: 0.2, type: 'square' }),
+    heal:    () => {
+      [523, 659, 784].forEach((f, i) => tone({ f0: f, dur: 0.12, vol: 0.11, delay: i * 0.09, type: 'sine' }));
+      noise({ f0: 2000, f1: 4500, dur: 0.35, vol: 0.05, ftype: 'highpass' });
+    },
+    cure:    () => {
+      tone({ f0: 880, f1: 1320, dur: 0.22, vol: 0.1, type: 'sine' });
+      tone({ f0: 1320, f1: 880, dur: 0.22, vol: 0.08, type: 'sine', delay: 0.2 });
+      noise({ f0: 3000, f1: 5200, dur: 0.3, vol: 0.04, ftype: 'highpass', delay: 0.1 });
+    },
     spawn:   () => { noise({ f0: 800, f1: 2600, dur: 0.18, vol: 0.14, ftype: 'bandpass' }); tone({ f0: 420, f1: 860, dur: 0.18, vol: 0.1 }); },
     victory: () => {
       const seq = [523, 523, 523, 659, 784, 1047];
