@@ -44,7 +44,9 @@ const Game = (() => {
       { species: 'THORNLET', level: 9, hp: null },
       { species: 'EMBERIK', level: 9, hp: null },
     ],
-    beaten: false,
+    npcs: {},            // npcId -> true once that trainer is beaten
+    bossBeaten: false,
+    bossCaptured: false,
     battles: 0,
   };
 
@@ -60,14 +62,29 @@ const Game = (() => {
     scene.enter(params || {});
   }
 
-  function toBattle() {
+  function toBattle(opts) {
+    opts = opts || {};
     save.battles++;
-    Sfx.play('spawn');
-    Fx.transition('battleIn', () => switchNow('battle'), null);
+    const dungeon = opts.arena === 'dungeon';
+    Sfx.play(dungeon ? 'rift' : 'spawn');
+    Fx.transition(dungeon ? 'portalIn' : 'battleIn', () => switchNow('battle', opts), null);
   }
 
-  function toOverworld(result) {
-    Fx.transition('fade', () => switchNow('overworld', { result }), null);
+  function toDungeon() {
+    toBattle({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } });
+  }
+
+  function toOverworld(result, ctx) {
+    Fx.transition('fade', () => switchNow('overworld', Object.assign({ result }, ctx || {})), null);
+  }
+
+  // called by Battle.endBattle: record progress, then return to the overworld
+  function onBattleEnd(result, enemy) {
+    if (result === 'win' || result === 'capture') {
+      if (enemy && enemy.isBoss) { save.bossBeaten = true; if (result === 'capture') save.bossCaptured = true; }
+      else if (enemy && enemy.npcId) save.npcs[enemy.npcId] = true;
+    }
+    toOverworld(result, { fromDungeon: !!(enemy && enemy.isBoss) });
   }
 
   // ----------------------------------------------------- resolution
@@ -290,13 +307,14 @@ const Game = (() => {
     const hash = location.hash;
     if (hash.indexOf('viewer') >= 0) { scene = Viewer; scene.enter(); }
     else if (hash.indexOf('fly') >= 0) { scene = Battle; scene.enter({ fly: true }); }
+    else if (hash.indexOf('dungeon') >= 0) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
     else if (hash.indexOf('battle') >= 0) { scene = Battle; scene.enter({}); }
     else { scene = Overworld; scene.enter({}); }
 
     requestAnimationFrame((now) => { last = now; requestAnimationFrame(loop); });
   }
 
-  return { boot, save, handle, toBattle, toOverworld };
+  return { boot, save, handle, toBattle, toDungeon, toOverworld, onBattleEnd };
 })();
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

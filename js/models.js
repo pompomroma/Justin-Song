@@ -341,6 +341,124 @@ const Models = (() => {
     return { g, colors, s: 0.1, jitter: 0.1 };
   }
 
+  // ============================================================ dungeon/boss
+
+  // VORNETH (base) — hunched void beast: obsidian body, glowing magenta
+  // cracks + core, horns, burning eyes, clawed arms. Faces +z. ~1.7u tall.
+  function vorneth() {
+    const g = Vox.grid(20, 22, 18);
+    const C = { dark: 0, dark2: 1, crack: 2, horn: 3, eye: 4, claw: 5 };
+    const colors = pal('#1d1630', '#2b2148', '#c050ff', '#0d0a18', '#ff3a66', '#d0a0ff');
+    g.ellipsoid(10, 11, 9, 6, 6.5, 5.2, C.dark);        // torso
+    g.ellipsoid(10, 8, 9, 5.4, 4.5, 5, C.dark2);        // belly
+    // right shoulder / arm / claw (author x>=10; mirrorX fills the left)
+    g.ellipsoid(14.5, 14, 9, 3, 3, 3, C.dark);
+    g.box(15, 6, 8, 17, 14, 10, C.dark);
+    g.box(16, 4, 8, 17, 5, 11, C.claw);
+    g.set(17, 3, 8, C.claw); g.set(17, 3, 11, C.claw);
+    g.box(12, 0, 8, 14, 4, 10, C.dark2);                // right leg
+    g.box(12, 0, 10, 14, 0, 12, C.claw);
+    g.ellipsoid(10, 16, 10, 3.6, 3.2, 3.4, C.dark);     // head
+    g.box(9, 15, 12, 11, 17, 13, C.dark2);              // brow
+    g.box(13, 18, 9, 13, 20, 9, C.horn); g.set(14, 21, 9, C.horn); // right horn
+    for (let y = 5; y < 16; y += 2) g.set(10, y, 14, C.crack);      // spine cracks
+    g.set(11, 8, 14, C.crack); g.set(12, 11, 13, C.crack);
+    g.ellipsoid(10, 10, 13.6, 1.5, 1.5, 0.7, C.crack);  // chest core
+    g.set(12, 16, 13, C.eye);                           // right eye
+    g.mirrorX();
+    return { g, colors, s: 0.078, jitter: 0.08 };
+  }
+
+  // VORNETH-X (awakened) — taller, winged, crowned, brighter cracks and an
+  // exposed core. Faces +z. ~2.9u tall (towers on the cliff).
+  function vorneth_x() {
+    const g = Vox.grid(28, 32, 22);
+    const C = { dark: 0, dark2: 1, crack: 2, horn: 3, eye: 4, claw: 5, wing: 6, core: 7 };
+    const colors = pal('#231a3c', '#33265a', '#e070ff', '#0d0a18', '#ff5a7a', '#e0b0ff', '#160f28', '#ffffff');
+    g.ellipsoid(14, 16, 11, 7, 9, 6, C.dark);           // tall torso
+    g.ellipsoid(14, 11, 11, 6, 6, 5.6, C.dark2);
+    g.ellipsoid(14, 15, 16, 2.4, 2.6, 1.2, C.core);     // exposed core
+    g.ellipsoid(14, 15, 16.4, 1.4, 1.6, 0.8, C.crack);
+    // right wing (swept membrane behind the shoulder, z low)
+    g.box(19, 13, 4, 26, 27, 5, C.wing);
+    g.box(21, 24, 4, 27, 30, 5, C.wing);
+    g.box(20, 8, 4, 24, 13, 5, C.wing);
+    g.set(22, 20, 5, C.crack); g.set(24, 24, 5, C.crack); g.set(23, 14, 5, C.crack);
+    // right arm / claw
+    g.ellipsoid(20, 19, 11, 3.4, 3.4, 3.4, C.dark);
+    g.box(21, 8, 10, 23, 19, 12, C.dark);
+    g.box(22, 5, 10, 23, 7, 13, C.claw);
+    g.set(23, 4, 10, C.claw); g.set(23, 4, 13, C.claw);
+    g.box(16, 0, 10, 19, 6, 13, C.dark2);               // right leg
+    g.box(16, 0, 13, 19, 0, 15, C.claw);
+    g.ellipsoid(14, 23, 13, 4, 3.6, 3.8, C.dark);       // head
+    g.set(16, 22, 17, C.eye);
+    g.box(14, 26, 12, 14, 29, 12, C.horn);              // crown spikes
+    g.box(17, 25, 12, 17, 28, 12, C.horn);
+    g.box(19, 24, 12, 19, 26, 12, C.horn);
+    for (let y = 6; y < 22; y += 2) g.set(14, y, 17, C.crack);
+    g.set(16, 12, 17, C.crack); g.set(18, 16, 16, C.crack);
+    g.mirrorX();
+    return { g, colors, s: 0.09, jitter: 0.09 };
+  }
+
+  // rift portal — obsidian archway framing a dark void (overworld doorway)
+  function portal() {
+    const g = Vox.grid(24, 30, 8);
+    const C = { stone: 0, stone2: 1, rim: 2, voidc: 3 };
+    const colors = pal('#2a2240', '#1a1530', '#b060ff', '#0a0612');
+    const cx = 12, cy = 16, rx = 9, ry = 12;
+    for (let y = 0; y < 30; y++)
+      for (let x = 0; x < 24; x++) {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry, e = dx * dx + dy * dy;
+        if (e <= 1.0 && e >= 0.62) { for (let z = 1; z <= 5; z++) g.set(x, y, z, (x + y) % 2 ? C.stone : C.stone2); }
+        else if (e < 0.62 && y >= 3) { g.set(x, y, 3, C.voidc); g.set(x, y, 4, C.voidc); }
+        if (e <= 1.0 && e >= 0.62 && ((x * 3 + y * 5) % 7 === 0)) { g.set(x, y, 5, C.rim); g.set(x, y, 1, C.rim); }
+      }
+    g.box(2, 0, 1, 5, 5, 5, C.stone); g.box(18, 0, 1, 21, 5, 5, C.stone); // base legs
+    return { g, colors, s: 0.11, jitter: 0.1 };
+  }
+
+  // cliff — tapering obsidian plateau the dungeon boss stands atop (~3.4u)
+  function cliff() {
+    const g = Vox.grid(26, 28, 26);
+    const C = { rock: 0, rock2: 1, crack: 2, top: 3 };
+    const colors = pal('#241d34', '#181226', '#a050e0', '#2e2546');
+    const r = M3.rng(303);
+    for (let y = 0; y < 26; y++) {
+      const rad = 12 - y * 0.16 + (r() - 0.5) * 1.1;
+      for (let z = 0; z < 26; z++)
+        for (let x = 0; x < 26; x++) {
+          const dx = x - 13, dz = z - 13;
+          if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, (x + z + y) % 3 ? C.rock : C.rock2);
+        }
+    }
+    for (let z = 0; z < 26; z++)
+      for (let x = 0; x < 26; x++) { const dx = x - 13, dz = z - 13; if (dx * dx + dz * dz <= 104) g.set(x, 26, z, C.top); }
+    for (let i = 0; i < 30; i++) {
+      const a = r() * Math.PI * 2;
+      g.set(Math.round(13 + Math.cos(a) * 11), Math.floor(r() * 24), Math.round(13 + Math.sin(a) * 11), C.crack);
+    }
+    return { g, colors, s: 0.13, jitter: 0.1 };
+  }
+
+  // obsidian spire — jagged dungeon scatter
+  function spire() {
+    const g = Vox.grid(10, 20, 10);
+    const colors = pal('#1f1832', '#a050e0');
+    for (let y = 0; y < 20; y++) {
+      const rad = 4.2 * (1 - y / 22);
+      for (let z = 0; z < 10; z++)
+        for (let x = 0; x < 10; x++) { const dx = x - 5, dz = z - 5; if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, 0); }
+    }
+    for (let y = 2; y < 18; y += 3) g.set(5, y, 8, 1);
+    return { g, colors, s: 0.12, jitter: 0.12 };
+  }
+
+  const npc_hiker = () => humanoid({ skin: '#d8a878', hair: '#3a2a1a', top: '#6b8e3a', sleeve: '#4a6328', legs: '#5a4a32', shoe: '#3a2e20', cap: '#7a5a30', capBrim: true }, 'idle');
+  const npc_lass  = () => humanoid({ skin: '#ecc0a0', hair: '#d86a30', top: '#e87aa0', sleeve: '#c85a86', legs: '#9a5ab0', shoe: '#6a3a80' }, 'idle');
+  const npc_ace   = () => humanoid({ skin: '#caa078', hair: '#1a2a4a', top: '#2a3a6a', sleeve: '#1c2a52', legs: '#23304a', shoe: '#161c30', cap: '#2a3a6a', capBrim: true }, 'idle');
+
   // ================================================================ ground
 
   /* groundMesh(opts): flat disc of 0.5u quads, one flat color per quad
@@ -351,8 +469,9 @@ const Models = (() => {
     const radius = opts.radius || 14;
     const step = 0.5;
     const patches = opts.patches || [];
-    const grassA = M3.hex('#3f6d3a'), grassB = M3.hex('#487c41'), grassC = M3.hex('#36602f');
-    const dirtA = M3.hex('#6b5238'), dirtB = M3.hex('#7a5f40');
+    const dark = !!opts.dark; // dungeon obsidian floor vs. grove grass
+    const grassA = M3.hex(dark ? '#1c1530' : '#3f6d3a'), grassB = M3.hex(dark ? '#241a3e' : '#487c41'), grassC = M3.hex(dark ? '#140e24' : '#36602f');
+    const dirtA = M3.hex(dark ? '#2a2042' : '#6b5238'), dirtB = M3.hex(dark ? '#352a52' : '#7a5f40');
     const n = Math.ceil(radius / step);
     const quads = [];
     for (let gz = -n; gz < n; gz++)
@@ -399,6 +518,7 @@ const Models = (() => {
 
   const BUILDERS = {
     pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
+    vorneth, vorneth_x, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,

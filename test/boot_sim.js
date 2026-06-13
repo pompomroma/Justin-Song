@@ -29,7 +29,7 @@ function makeCtx2d() {
     fillRect() {}, clearRect() {}, strokeRect() {},
     beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, arc() {},
     fill() {}, stroke() {}, save() {}, restore() {},
-    translate() {}, scale() {}, setTransform() {}, drawImage() {}, fillText() {},
+    translate() {}, scale() {}, setTransform() {}, drawImage() {}, fillText() {}, rect() {},
     createLinearGradient() { return grad; },
   };
 }
@@ -143,8 +143,8 @@ function attackCycle(sb) {
   const sb = makeSandbox('#battle');
   let ended = null;
   vm.runInContext(`(${function () {
-    const orig = Game.toOverworld;
-    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
   }.toString()})()`, sb);
   sb.__pump(60);
   ok(sb.__errors.length === 0, 'battle boots without errors');
@@ -210,8 +210,8 @@ function attackCycle(sb) {
   vm.runInContext(`(${function () {
     BData.aiPick = () => 'GROWL';
     Game.save.party[0].hp = null; // full HP
-    const orig = Game.toOverworld;
-    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
   }.toString()})()`, sb);
   sb.__pump(5);
   let frames = 0;
@@ -220,9 +220,9 @@ function attackCycle(sb) {
     frames += 40;
   }
   const ended = vm.runInContext('globalThis.__battleEnd', sb);
-  const beaten = vm.runInContext('__Game.save.beaten', sb);
+  const beaten = vm.runInContext('__Game.save.npcs.rex === true', sb);
   ok(ended === 'win' && beaten === true,
-     'victory path completes (' + ended + ', beaten=' + beaten + ', ' + frames + ' frames)');
+     'victory path completes (' + ended + ', rexBeaten=' + beaten + ', ' + frames + ' frames)');
   sb.__pump(200);
   ok(sb.__errors.length === 0, 'no errors through the victory path' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
@@ -233,8 +233,8 @@ function attackCycle(sb) {
   const sb = makeSandbox('#battle');
   vm.runInContext(`(${function () {
     BData.captureChance = () => 1; // guaranteed catch
-    const orig = Game.toOverworld;
-    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
   }.toString()})()`, sb);
   sb.__pump(5);
   const phase = (keys, frames) => {
@@ -265,8 +265,8 @@ function attackCycle(sb) {
 {
   const sb = makeSandbox('#battle');
   vm.runInContext(`(${function () {
-    const orig = Game.toOverworld;
-    Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
   }.toString()})()`, sb);
   sb.__pump(5);
   let frames = 0;
@@ -283,6 +283,39 @@ function attackCycle(sb) {
   ok(ended === 'run', 'run-away path completes (' + ended + ')');
   sb.__pump(200);
   ok(sb.__errors.length === 0, 'no errors through the run-away path');
+}
+
+// ---------------------- run 8: dungeon boss (transform + capture flag)
+{
+  const sb = makeSandbox('#dungeon');
+  // rig damage so the player crushes (boss drops past its threshold and
+  // awakens, then is defeated) while the boss only chips — guarantees the
+  // transformation climax and a boss victory run through cleanly.
+  vm.runInContext(`(${function () {
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => {
+      const r = realDmg(att, def, move, rng);
+      if (!r.miss && move.power) r.dmg = att.level <= 12 ? 40 : 3;
+      return r;
+    };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(60);
+  ok(sb.__errors.length === 0, 'dungeon boss boots without errors' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+  let frames = 0;
+  while (frames < 60000 && !vm.runInContext('globalThis.__battleEnd', sb)) {
+    attackCycle(sb);
+    frames += 40;
+  }
+  const ended = vm.runInContext('globalThis.__battleEnd', sb);
+  const bossBeaten = vm.runInContext('__Game.save.bossBeaten === true', sb);
+  ok(ended === 'win' && bossBeaten,
+     'dungeon boss defeated through the transform climax (' + ended + ', bossBeaten=' + bossBeaten + ', ' + frames + ' frames)');
+  sb.__pump(250);
+  ok(sb.__errors.length === 0, 'no errors through the boss battle + transformation' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');

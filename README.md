@@ -6,11 +6,20 @@ A Pokemon-style, turn-based battle RPG prototype rendered entirely in
 files. Everything (models, font, UI, sound) is generated procedurally
 in vanilla JavaScript, so it runs on a completely empty Replit project.
 
-Walk the forest clearing as the trainer, talk to **Camper REX**, and
-battle his **MAGMULE** (Lv.15) with your party — **PIXLIT** (Lv.10),
-**THORNLET** and **EMBERIK** (Lv.9): dynamic camera swings, screen
-shake, hitstop, particle bursts and a classic text-driven turn system
-(PP, stat stages, crits, misses).
+Roam a large forest, challenge several scattered trainers — **Camper
+REX**, **Hiker DALE**, **Lass IVY** and **Ace KORU** — with your party
+of **PIXLIT**, **THORNLET** and **EMBERIK**, then step through the dark
+**rift portal** at the far edge into an intimidating dungeon to face
+the boss, **VORNETH**. Expect dynamic camera swings, screen shake,
+hitstop, bullet-time, voxel particle storms and a classic text-driven
+turn system (PP, stat stages, crits, misses).
+
+**The boss, VORNETH:** in the dungeon it looms atop a cliff while the
+camera tilts up at it (Dynamax/Gigantamax-style framing). Drop it below
+half HP and it erupts into an awakened second form — the game's grandest
+animation. Its attacks are the flashiest of any monster. Weaken and
+capture it with a Voxball and it joins your party; as your ally you can
+trigger that same transformation yourself with its **Awaken** move.
 
 Battles are always 1v1, but you command a **party of up to six
 allies**: switch freely mid-battle (a switch uses your turn), and when
@@ -98,7 +107,8 @@ FPS / resolution readout.
 
 ## Debug modes (URL hash)
 
-- `index.html#battle` — jump straight into the battle
+- `index.html#battle` — jump straight into a grove battle
+- `index.html#dungeon` — jump straight into the VORNETH boss fight
 - `index.html#viewer` — voxel model inspector (Left/Right to cycle)
 - `index.html#fly` — free camera in the battle arena
   (WASD move, IJKL look, R/F up/down, Shift fast, **P** prints the
@@ -121,6 +131,10 @@ key presses, and exercises the overworld, viewer and fly modes.
 
 ## Manual checklist
 
-walk → talk to REX → screen flash/wipe into battle → try each move
-(Tackle / Growl / Mindbeam / Psyblast) → win path (faint dissolve,
-victory orbit, EXP) → rematch → loss path (black out) → mute toggle.
+walk the larger world → battle each trainer (REX / DALE / IVY / KORU)
+→ try each action (Attack moves, Items: Heal/Cure, Capture, Run, party
+switch with C) → enter the rift portal (swirling portal transition) →
+boss intro atop the cliff with the upward camera → knock VORNETH below
+half HP to trigger its transformation climax → defeat or capture it →
+field the captured VORNETH and use its Awaken move → loss path (black
+out) → mute (M) and stats (T) toggles.

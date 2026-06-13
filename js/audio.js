@@ -84,6 +84,15 @@ const Sfx = (() => {
       tone({ f0: 120, f1: 58, dur: 0.55, vol: 0.2, type: 'sawtooth' });
       tone({ f0: 240, f1: 90, dur: 0.5, vol: 0.12, type: 'square', delay: 0.05 });
     },
+    rift:    () => { // cold void swell — portal / boss presence
+      noise({ f0: 180, f1: 1600, dur: 0.7, vol: 0.16, ftype: 'bandpass', q: 2.2 });
+      tone({ f0: 70, f1: 150, dur: 0.7, vol: 0.16, type: 'sine' });
+      tone({ f0: 520, f1: 110, dur: 0.6, vol: 0.08, type: 'sawtooth', delay: 0.1 });
+    },
+    quake:   () => { // deep transformation rumble
+      noise({ f0: 90, f1: 40, dur: 0.8, vol: 0.4, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 60, f1: 30, dur: 0.8, vol: 0.24, type: 'sine' });
+    },
     boom:    () => {
       noise({ f0: 700, f1: 60, dur: 0.45, vol: 0.6 });
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });

@@ -134,6 +134,7 @@ const Fx = (() => {
     // battleIn midpoint must land inside the fully-covered window
     // (cover==1 between k=0.52 and k=0.62 — see transitionDraw)
     if (kind === 'battleIn') trans = { kind, t: 0, dur: 1.45, mid: 0.57, midFired: false, onMid, onDone };
+    else if (kind === 'portalIn') trans = { kind, t: 0, dur: 1.85, mid: 0.5, midFired: false, onMid, onDone };
     else trans = { kind: 'fade', t: 0, dur: 1.1, mid: 0.5, midFired: false, onMid, onDone };
   }
   const transitioning = () => !!trans;
@@ -168,6 +169,43 @@ const Fx = (() => {
             ctx.closePath(); ctx.fill();
           }
         }
+      }
+    } else if (trans.kind === 'portalIn') {
+      // collapse into a swirling void, magenta burst at the midpoint, then
+      // an iris opens onto the dungeon
+      const cx = 480, cy = 270;
+      const closing = k < 0.5;
+      if (closing) {
+        ctx.globalAlpha = M3.clamp(k / 0.5, 0, 1);
+        ctx.fillStyle = '#06030c';
+        ctx.fillRect(0, 0, 960, 540);
+        ctx.globalAlpha = 1;
+      } else {
+        const hole = M3.ease.inOutCubic((k - 0.5) / 0.5) * 800;
+        ctx.fillStyle = '#06030c';
+        ctx.beginPath();
+        ctx.rect(0, 0, 960, 540);
+        ctx.arc(cx, cy, hole, 0, Math.PI * 2, true);
+        ctx.fill('evenodd');
+      }
+      const spin = trans.t * 7;
+      const env = closing ? (k / 0.5) : (1 - (k - 0.5) / 0.5);
+      ctx.lineWidth = 6;
+      for (let i = 0; i < 6; i++) {
+        const rr = 40 + i * 60 + (closing ? (1 - k / 0.5) * 120 : 0);
+        ctx.strokeStyle = 'rgba(' + (140 + i * 18) + ',' + (60 + i * 8) + ',255,' + (0.5 * env) + ')';
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, spin + i * 1.1, spin + i * 1.1 + 2.2);
+        ctx.stroke();
+      }
+      const burst = 1 - Math.min(1, Math.abs(k - 0.5) / 0.12);
+      if (burst > 0) {
+        ctx.globalAlpha = burst;
+        ctx.fillStyle = '#e8b0ff';
+        ctx.beginPath(); ctx.arc(cx, cy, 60 + burst * 230, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(cx, cy, 20 + burst * 90, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
       }
     } else { // fade
       const a = k < trans.mid ? k / trans.mid : 1 - (k - trans.mid) / (1 - trans.mid);

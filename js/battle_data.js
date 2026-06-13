@@ -15,6 +15,12 @@ const BData = (() => {
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
     MAGMULE:  { name: 'MAGMULE',  base: { hp: 52, atk: 32, def: 42, spe: 35 },
                 moves: ['TACKLE', 'CINDER', 'GROWL'] },
+    // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
+    // into its true form mid-battle; statsFor() resolves each form's block.
+    VORNETH:   { name: 'VORNETH', base: { hp: 80, atk: 60, def: 60, spe: 50 },
+                 moves: ['TACKLE', 'VOIDLANCE', 'DREADWAVE', 'AWAKEN'], form2: 'VORNETH_X', boss: true },
+    VORNETH_X: { name: 'VORNETH-X', base: { hp: 80, atk: 88, def: 74, spe: 72 },
+                 moves: ['VOIDLANCE', 'ABYSSNOVA', 'DREADWAVE', 'VOIDSTORM'], boss: true },
   };
 
   /* anim kinds (battle.js dispatch): dash | rings | beam | orb | volley.
@@ -37,6 +43,16 @@ const BData = (() => {
                  anim: 'beam',   fx: [[0.55, 0.95, 0.4], W, [0.3, 0.75, 0.3]] },
     SEEDBURST: { name: 'Seedburst', type: 'LEAF',   power: 70, acc: 90,  pp: 15,
                  anim: 'volley', fx: [[0.55, 0.95, 0.4], [0.85, 0.7, 0.3], [0.3, 0.75, 0.3]] },
+    // boss moves (bespoke 'void' animations, grandest in the game)
+    VOIDLANCE: { name: 'Void Lance', type: 'VOID', power: 60, acc: 100, pp: 15,
+                 anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.5, 0.12, 0.7]] },
+    DREADWAVE: { name: 'Dread Wave', type: 'VOID', power: 45, acc: 100, pp: 15,
+                 anim: 'voidnova', fx: [[0.6, 0.2, 0.9], [0.3, 0.1, 0.5], [1, 1, 1]] },
+    ABYSSNOVA: { name: 'Abyss Nova', type: 'VOID', power: 95, acc: 90,  pp: 5,
+                 anim: 'voidnova', fx: [[0.85, 0.35, 1], [1, 0.5, 0.95], [1, 1, 1], [0.4, 0.12, 0.6]] },
+    VOIDSTORM: { name: 'Void Storm', type: 'VOID', power: 80, acc: 90,  pp: 10,
+                 anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.95, 0.45, 1]] },
+    AWAKEN:    { name: 'Awaken', type: 'VOID', power: 0, acc: 100, pp: 5, effect: 'transform' },
   };
 
   // battle items: 3 charges of each per battle
@@ -76,16 +92,31 @@ const BData = (() => {
   }
 
   // capture odds scale with how hurt the target is
-  const captureChance = (hpFrac) => M3.clamp(0.25 + 0.65 * (1 - hpFrac), 0.05, 0.95);
+  // bosses are far harder to catch; only realistic when badly weakened
+  const captureChance = (hpFrac, isBoss) => {
+    let c = 0.25 + 0.65 * (1 - hpFrac);
+    if (isBoss) c *= 0.5;
+    return M3.clamp(c, isBoss ? 0.03 : 0.05, isBoss ? 0.6 : 0.95);
+  };
 
-  /* enemy move choice. ai: {atkStage (its own), foeHpFrac, pp: {moveId: n}} */
-  function aiPick(ai, rng) {
+  /* enemy move choice over its OWN current moveset (works for any species
+     and either boss form). ai: {atkStage, foeHpFrac, pp: {moveId: n}}.
+     Transform moves are never AI-picked — boss phase changes are forced by
+     an HP threshold in battle.js. */
+  function aiPick(moves, ai, rng) {
     const w = [];
-    const add = (id, weight) => { if ((ai.pp[id] || 0) > 0 && weight > 0) w.push([id, weight]); };
-    add('TACKLE', 0.40);
-    add('CINDER', 0.35);
-    add('GROWL', (ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.25);
-    if (!w.length) return 'TACKLE'; // struggle-ish fallback
+    for (const id of moves) {
+      const mv = MOVES[id];
+      if (!mv || (ai.pp[id] || 0) <= 0 || mv.effect === 'transform') continue;
+      let weight;
+      if (mv.effect === 'atkDown') weight = (ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.22;
+      else weight = 0.4 + (mv.power || 0) / 220; // favor stronger moves
+      if (weight > 0) w.push([id, weight]);
+    }
+    if (!w.length) {
+      for (const id of moves) if ((ai.pp[id] || 0) > 0 && MOVES[id] && MOVES[id].effect !== 'transform') return id;
+      return moves[0];
+    }
     let total = 0;
     for (const [, weight] of w) total += weight;
     let roll = rng() * total;
@@ -94,8 +125,8 @@ const BData = (() => {
   }
 
   const MSG = {
-    intro1: 'Camper REX would like to battle!',
-    intro2: 'Camper REX sent out MAGMULE!',
+    challenge: '{T} would like to battle!',
+    sentOut: '{T} sent out {M}!',
     go: 'Go! {A}!',
     comeBack: '{A}, come back!',
     used: '{A} used {M}!',
@@ -116,28 +147,47 @@ const BData = (() => {
     fled: 'You got away safely!',
     choose: 'Choose your next ally!',
     faint: '{A} fainted!',
-    win1: 'You defeated Camper REX!',
-    win2: 'REX: Whoa! Your team is scrappier than it looks!',
-    win3: '{A} gained 135 EXP. Points!',
+    win1: 'You defeated {T}!',
+    win3: '{A} gained {E} EXP. Points!',
     lose1: 'You have no creatures that can fight!',
     lose2: 'You blacked out!',
+    // dungeon boss
+    bossAppear1: 'The air splits with a deafening shriek...',
+    bossAppear2: 'Something vast stirs atop the rift-cliff!',
+    bossReveal: 'VORNETH looms over you from the cliff!',
+    bossWin1: 'The rift shudders and goes dark...',
+    bossWin2: 'You drove VORNETH back into the void!',
+    transform1: '{A} is convulsing with dark power!',
+    transform2: '{A} awakened into {B}!',
   };
 
   const fmt = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k]) !== undefined ? vars[k] : '{' + k + '}');
 
-  // overworld dialogue
+  // overworld dialogue, keyed by NPC id (intro before first battle, rematch
+  // before later ones, beaten once defeated). portal/boss are special.
   const DIALOGUE = {
-    first: [
-      'REX: Hey! You stomped right through my camp!',
-      'REX: My MAGMULE and I will teach you some manners!',
-    ],
-    rematch: [
-      'REX: Back for more? MAGMULE is all fired up!',
-    ],
-    beaten: [
-      'REX: Whew... MAGMULE needs a nap after that one.',
-      'REX: Come back any time for a rematch!',
-    ],
+    rex: {
+      intro: ['REX: Hey! You stomped right through my camp!', 'REX: My MAGMULE will teach you some manners!'],
+      rematch: ['REX: Back for more? MAGMULE is all fired up!'],
+      beaten: ['REX: Whew... that was a scrap.', "REX: That rift past the ridge? Don't face it unprepared."],
+    },
+    hiker: {
+      intro: ['HIKER DALE: These woods go on forever, kid.', 'DALE: Prove you can handle a real climb!'],
+      rematch: ['DALE: Round two? My THORNLET is ready!'],
+      beaten: ['DALE: Hah! You have got the legs for this trail.'],
+    },
+    lass: {
+      intro: ['LASS IVY: Ooh, a challenger!', 'IVY: My EMBERIK runs hot. Watch out!'],
+      rematch: ['IVY: Let us dance again!'],
+      beaten: ['IVY: So warm... so strong. Well played!'],
+    },
+    ace: {
+      intro: ['ACE KORU: You reek of easy battles.', 'KORU: Show me something worth my time.'],
+      rematch: ['KORU: Again. Do not bore me.'],
+      beaten: ['KORU: ...Impressive. The rift may not break you after all.'],
+    },
+    portal: ['A jagged rift claws at the air, pulsing with cold light.', 'Step into the darkness?'],
+    portalDone: ['The rift is silent now. Only embers drift through it.'],
   };
 
   return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick, MSG, fmt, DIALOGUE };

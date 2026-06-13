@@ -371,6 +371,15 @@ const Sfx = (() => {
       tone({ f0: 120, f1: 58, dur: 0.55, vol: 0.2, type: 'sawtooth' });
       tone({ f0: 240, f1: 90, dur: 0.5, vol: 0.12, type: 'square', delay: 0.05 });
     },
+    rift:    () => { // cold void swell — portal / boss presence
+      noise({ f0: 180, f1: 1600, dur: 0.7, vol: 0.16, ftype: 'bandpass', q: 2.2 });
+      tone({ f0: 70, f1: 150, dur: 0.7, vol: 0.16, type: 'sine' });
+      tone({ f0: 520, f1: 110, dur: 0.6, vol: 0.08, type: 'sawtooth', delay: 0.1 });
+    },
+    quake:   () => { // deep transformation rumble
+      noise({ f0: 90, f1: 40, dur: 0.8, vol: 0.4, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 60, f1: 30, dur: 0.8, vol: 0.24, type: 'sine' });
+    },
     boom:    () => {
       noise({ f0: 700, f1: 60, dur: 0.45, vol: 0.6 });
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
@@ -1091,6 +1100,124 @@ const Models = (() => {
     return { g, colors, s: 0.1, jitter: 0.1 };
   }
 
+  // ============================================================ dungeon/boss
+
+  // VORNETH (base) — hunched void beast: obsidian body, glowing magenta
+  // cracks + core, horns, burning eyes, clawed arms. Faces +z. ~1.7u tall.
+  function vorneth() {
+    const g = Vox.grid(20, 22, 18);
+    const C = { dark: 0, dark2: 1, crack: 2, horn: 3, eye: 4, claw: 5 };
+    const colors = pal('#1d1630', '#2b2148', '#c050ff', '#0d0a18', '#ff3a66', '#d0a0ff');
+    g.ellipsoid(10, 11, 9, 6, 6.5, 5.2, C.dark);        // torso
+    g.ellipsoid(10, 8, 9, 5.4, 4.5, 5, C.dark2);        // belly
+    // right shoulder / arm / claw (author x>=10; mirrorX fills the left)
+    g.ellipsoid(14.5, 14, 9, 3, 3, 3, C.dark);
+    g.box(15, 6, 8, 17, 14, 10, C.dark);
+    g.box(16, 4, 8, 17, 5, 11, C.claw);
+    g.set(17, 3, 8, C.claw); g.set(17, 3, 11, C.claw);
+    g.box(12, 0, 8, 14, 4, 10, C.dark2);                // right leg
+    g.box(12, 0, 10, 14, 0, 12, C.claw);
+    g.ellipsoid(10, 16, 10, 3.6, 3.2, 3.4, C.dark);     // head
+    g.box(9, 15, 12, 11, 17, 13, C.dark2);              // brow
+    g.box(13, 18, 9, 13, 20, 9, C.horn); g.set(14, 21, 9, C.horn); // right horn
+    for (let y = 5; y < 16; y += 2) g.set(10, y, 14, C.crack);      // spine cracks
+    g.set(11, 8, 14, C.crack); g.set(12, 11, 13, C.crack);
+    g.ellipsoid(10, 10, 13.6, 1.5, 1.5, 0.7, C.crack);  // chest core
+    g.set(12, 16, 13, C.eye);                           // right eye
+    g.mirrorX();
+    return { g, colors, s: 0.078, jitter: 0.08 };
+  }
+
+  // VORNETH-X (awakened) — taller, winged, crowned, brighter cracks and an
+  // exposed core. Faces +z. ~2.9u tall (towers on the cliff).
+  function vorneth_x() {
+    const g = Vox.grid(28, 32, 22);
+    const C = { dark: 0, dark2: 1, crack: 2, horn: 3, eye: 4, claw: 5, wing: 6, core: 7 };
+    const colors = pal('#231a3c', '#33265a', '#e070ff', '#0d0a18', '#ff5a7a', '#e0b0ff', '#160f28', '#ffffff');
+    g.ellipsoid(14, 16, 11, 7, 9, 6, C.dark);           // tall torso
+    g.ellipsoid(14, 11, 11, 6, 6, 5.6, C.dark2);
+    g.ellipsoid(14, 15, 16, 2.4, 2.6, 1.2, C.core);     // exposed core
+    g.ellipsoid(14, 15, 16.4, 1.4, 1.6, 0.8, C.crack);
+    // right wing (swept membrane behind the shoulder, z low)
+    g.box(19, 13, 4, 26, 27, 5, C.wing);
+    g.box(21, 24, 4, 27, 30, 5, C.wing);
+    g.box(20, 8, 4, 24, 13, 5, C.wing);
+    g.set(22, 20, 5, C.crack); g.set(24, 24, 5, C.crack); g.set(23, 14, 5, C.crack);
+    // right arm / claw
+    g.ellipsoid(20, 19, 11, 3.4, 3.4, 3.4, C.dark);
+    g.box(21, 8, 10, 23, 19, 12, C.dark);
+    g.box(22, 5, 10, 23, 7, 13, C.claw);
+    g.set(23, 4, 10, C.claw); g.set(23, 4, 13, C.claw);
+    g.box(16, 0, 10, 19, 6, 13, C.dark2);               // right leg
+    g.box(16, 0, 13, 19, 0, 15, C.claw);
+    g.ellipsoid(14, 23, 13, 4, 3.6, 3.8, C.dark);       // head
+    g.set(16, 22, 17, C.eye);
+    g.box(14, 26, 12, 14, 29, 12, C.horn);              // crown spikes
+    g.box(17, 25, 12, 17, 28, 12, C.horn);
+    g.box(19, 24, 12, 19, 26, 12, C.horn);
+    for (let y = 6; y < 22; y += 2) g.set(14, y, 17, C.crack);
+    g.set(16, 12, 17, C.crack); g.set(18, 16, 16, C.crack);
+    g.mirrorX();
+    return { g, colors, s: 0.09, jitter: 0.09 };
+  }
+
+  // rift portal — obsidian archway framing a dark void (overworld doorway)
+  function portal() {
+    const g = Vox.grid(24, 30, 8);
+    const C = { stone: 0, stone2: 1, rim: 2, voidc: 3 };
+    const colors = pal('#2a2240', '#1a1530', '#b060ff', '#0a0612');
+    const cx = 12, cy = 16, rx = 9, ry = 12;
+    for (let y = 0; y < 30; y++)
+      for (let x = 0; x < 24; x++) {
+        const dx = (x - cx) / rx, dy = (y - cy) / ry, e = dx * dx + dy * dy;
+        if (e <= 1.0 && e >= 0.62) { for (let z = 1; z <= 5; z++) g.set(x, y, z, (x + y) % 2 ? C.stone : C.stone2); }
+        else if (e < 0.62 && y >= 3) { g.set(x, y, 3, C.voidc); g.set(x, y, 4, C.voidc); }
+        if (e <= 1.0 && e >= 0.62 && ((x * 3 + y * 5) % 7 === 0)) { g.set(x, y, 5, C.rim); g.set(x, y, 1, C.rim); }
+      }
+    g.box(2, 0, 1, 5, 5, 5, C.stone); g.box(18, 0, 1, 21, 5, 5, C.stone); // base legs
+    return { g, colors, s: 0.11, jitter: 0.1 };
+  }
+
+  // cliff — tapering obsidian plateau the dungeon boss stands atop (~3.4u)
+  function cliff() {
+    const g = Vox.grid(26, 28, 26);
+    const C = { rock: 0, rock2: 1, crack: 2, top: 3 };
+    const colors = pal('#241d34', '#181226', '#a050e0', '#2e2546');
+    const r = M3.rng(303);
+    for (let y = 0; y < 26; y++) {
+      const rad = 12 - y * 0.16 + (r() - 0.5) * 1.1;
+      for (let z = 0; z < 26; z++)
+        for (let x = 0; x < 26; x++) {
+          const dx = x - 13, dz = z - 13;
+          if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, (x + z + y) % 3 ? C.rock : C.rock2);
+        }
+    }
+    for (let z = 0; z < 26; z++)
+      for (let x = 0; x < 26; x++) { const dx = x - 13, dz = z - 13; if (dx * dx + dz * dz <= 104) g.set(x, 26, z, C.top); }
+    for (let i = 0; i < 30; i++) {
+      const a = r() * Math.PI * 2;
+      g.set(Math.round(13 + Math.cos(a) * 11), Math.floor(r() * 24), Math.round(13 + Math.sin(a) * 11), C.crack);
+    }
+    return { g, colors, s: 0.13, jitter: 0.1 };
+  }
+
+  // obsidian spire — jagged dungeon scatter
+  function spire() {
+    const g = Vox.grid(10, 20, 10);
+    const colors = pal('#1f1832', '#a050e0');
+    for (let y = 0; y < 20; y++) {
+      const rad = 4.2 * (1 - y / 22);
+      for (let z = 0; z < 10; z++)
+        for (let x = 0; x < 10; x++) { const dx = x - 5, dz = z - 5; if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, 0); }
+    }
+    for (let y = 2; y < 18; y += 3) g.set(5, y, 8, 1);
+    return { g, colors, s: 0.12, jitter: 0.12 };
+  }
+
+  const npc_hiker = () => humanoid({ skin: '#d8a878', hair: '#3a2a1a', top: '#6b8e3a', sleeve: '#4a6328', legs: '#5a4a32', shoe: '#3a2e20', cap: '#7a5a30', capBrim: true }, 'idle');
+  const npc_lass  = () => humanoid({ skin: '#ecc0a0', hair: '#d86a30', top: '#e87aa0', sleeve: '#c85a86', legs: '#9a5ab0', shoe: '#6a3a80' }, 'idle');
+  const npc_ace   = () => humanoid({ skin: '#caa078', hair: '#1a2a4a', top: '#2a3a6a', sleeve: '#1c2a52', legs: '#23304a', shoe: '#161c30', cap: '#2a3a6a', capBrim: true }, 'idle');
+
   // ================================================================ ground
 
   /* groundMesh(opts): flat disc of 0.5u quads, one flat color per quad
@@ -1101,8 +1228,9 @@ const Models = (() => {
     const radius = opts.radius || 14;
     const step = 0.5;
     const patches = opts.patches || [];
-    const grassA = M3.hex('#3f6d3a'), grassB = M3.hex('#487c41'), grassC = M3.hex('#36602f');
-    const dirtA = M3.hex('#6b5238'), dirtB = M3.hex('#7a5f40');
+    const dark = !!opts.dark; // dungeon obsidian floor vs. grove grass
+    const grassA = M3.hex(dark ? '#1c1530' : '#3f6d3a'), grassB = M3.hex(dark ? '#241a3e' : '#487c41'), grassC = M3.hex(dark ? '#140e24' : '#36602f');
+    const dirtA = M3.hex(dark ? '#2a2042' : '#6b5238'), dirtB = M3.hex(dark ? '#352a52' : '#7a5f40');
     const n = Math.ceil(radius / step);
     const quads = [];
     for (let gz = -n; gz < n; gz++)
@@ -1149,6 +1277,7 @@ const Models = (() => {
 
   const BUILDERS = {
     pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
+    vorneth, vorneth_x, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,
@@ -1340,6 +1469,7 @@ const UI = (() => {
     PSY:    { base: '#e85590', hi: '#f883b2', dark: '#93305c' },
     FIRE:   { base: '#f08030', hi: '#f8a060', dark: '#9c4a12' },
     LEAF:   { base: '#78b048', hi: '#9ad06e', dark: '#46702a' },
+    VOID:   { base: '#7a3cc8', hi: '#a86ee6', dark: '#3c1a6e' },
   };
 
   // top-level battle actions + item buttons
@@ -1887,6 +2017,7 @@ const Fx = (() => {
     // battleIn midpoint must land inside the fully-covered window
     // (cover==1 between k=0.52 and k=0.62 — see transitionDraw)
     if (kind === 'battleIn') trans = { kind, t: 0, dur: 1.45, mid: 0.57, midFired: false, onMid, onDone };
+    else if (kind === 'portalIn') trans = { kind, t: 0, dur: 1.85, mid: 0.5, midFired: false, onMid, onDone };
     else trans = { kind: 'fade', t: 0, dur: 1.1, mid: 0.5, midFired: false, onMid, onDone };
   }
   const transitioning = () => !!trans;
@@ -1921,6 +2052,43 @@ const Fx = (() => {
             ctx.closePath(); ctx.fill();
           }
         }
+      }
+    } else if (trans.kind === 'portalIn') {
+      // collapse into a swirling void, magenta burst at the midpoint, then
+      // an iris opens onto the dungeon
+      const cx = 480, cy = 270;
+      const closing = k < 0.5;
+      if (closing) {
+        ctx.globalAlpha = M3.clamp(k / 0.5, 0, 1);
+        ctx.fillStyle = '#06030c';
+        ctx.fillRect(0, 0, 960, 540);
+        ctx.globalAlpha = 1;
+      } else {
+        const hole = M3.ease.inOutCubic((k - 0.5) / 0.5) * 800;
+        ctx.fillStyle = '#06030c';
+        ctx.beginPath();
+        ctx.rect(0, 0, 960, 540);
+        ctx.arc(cx, cy, hole, 0, Math.PI * 2, true);
+        ctx.fill('evenodd');
+      }
+      const spin = trans.t * 7;
+      const env = closing ? (k / 0.5) : (1 - (k - 0.5) / 0.5);
+      ctx.lineWidth = 6;
+      for (let i = 0; i < 6; i++) {
+        const rr = 40 + i * 60 + (closing ? (1 - k / 0.5) * 120 : 0);
+        ctx.strokeStyle = 'rgba(' + (140 + i * 18) + ',' + (60 + i * 8) + ',255,' + (0.5 * env) + ')';
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, spin + i * 1.1, spin + i * 1.1 + 2.2);
+        ctx.stroke();
+      }
+      const burst = 1 - Math.min(1, Math.abs(k - 0.5) / 0.12);
+      if (burst > 0) {
+        ctx.globalAlpha = burst;
+        ctx.fillStyle = '#e8b0ff';
+        ctx.beginPath(); ctx.arc(cx, cy, 60 + burst * 230, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(cx, cy, 20 + burst * 90, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
       }
     } else { // fade
       const a = k < trans.mid ? k / trans.mid : 1 - (k - trans.mid) / (1 - trans.mid);
@@ -2165,6 +2333,12 @@ const BData = (() => {
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
     MAGMULE:  { name: 'MAGMULE',  base: { hp: 52, atk: 32, def: 42, spe: 35 },
                 moves: ['TACKLE', 'CINDER', 'GROWL'] },
+    // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
+    // into its true form mid-battle; statsFor() resolves each form's block.
+    VORNETH:   { name: 'VORNETH', base: { hp: 80, atk: 60, def: 60, spe: 50 },
+                 moves: ['TACKLE', 'VOIDLANCE', 'DREADWAVE', 'AWAKEN'], form2: 'VORNETH_X', boss: true },
+    VORNETH_X: { name: 'VORNETH-X', base: { hp: 80, atk: 88, def: 74, spe: 72 },
+                 moves: ['VOIDLANCE', 'ABYSSNOVA', 'DREADWAVE', 'VOIDSTORM'], boss: true },
   };
 
   /* anim kinds (battle.js dispatch): dash | rings | beam | orb | volley.
@@ -2187,6 +2361,16 @@ const BData = (() => {
                  anim: 'beam',   fx: [[0.55, 0.95, 0.4], W, [0.3, 0.75, 0.3]] },
     SEEDBURST: { name: 'Seedburst', type: 'LEAF',   power: 70, acc: 90,  pp: 15,
                  anim: 'volley', fx: [[0.55, 0.95, 0.4], [0.85, 0.7, 0.3], [0.3, 0.75, 0.3]] },
+    // boss moves (bespoke 'void' animations, grandest in the game)
+    VOIDLANCE: { name: 'Void Lance', type: 'VOID', power: 60, acc: 100, pp: 15,
+                 anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.5, 0.12, 0.7]] },
+    DREADWAVE: { name: 'Dread Wave', type: 'VOID', power: 45, acc: 100, pp: 15,
+                 anim: 'voidnova', fx: [[0.6, 0.2, 0.9], [0.3, 0.1, 0.5], [1, 1, 1]] },
+    ABYSSNOVA: { name: 'Abyss Nova', type: 'VOID', power: 95, acc: 90,  pp: 5,
+                 anim: 'voidnova', fx: [[0.85, 0.35, 1], [1, 0.5, 0.95], [1, 1, 1], [0.4, 0.12, 0.6]] },
+    VOIDSTORM: { name: 'Void Storm', type: 'VOID', power: 80, acc: 90,  pp: 10,
+                 anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.95, 0.45, 1]] },
+    AWAKEN:    { name: 'Awaken', type: 'VOID', power: 0, acc: 100, pp: 5, effect: 'transform' },
   };
 
   // battle items: 3 charges of each per battle
@@ -2226,16 +2410,31 @@ const BData = (() => {
   }
 
   // capture odds scale with how hurt the target is
-  const captureChance = (hpFrac) => M3.clamp(0.25 + 0.65 * (1 - hpFrac), 0.05, 0.95);
+  // bosses are far harder to catch; only realistic when badly weakened
+  const captureChance = (hpFrac, isBoss) => {
+    let c = 0.25 + 0.65 * (1 - hpFrac);
+    if (isBoss) c *= 0.5;
+    return M3.clamp(c, isBoss ? 0.03 : 0.05, isBoss ? 0.6 : 0.95);
+  };
 
-  /* enemy move choice. ai: {atkStage (its own), foeHpFrac, pp: {moveId: n}} */
-  function aiPick(ai, rng) {
+  /* enemy move choice over its OWN current moveset (works for any species
+     and either boss form). ai: {atkStage, foeHpFrac, pp: {moveId: n}}.
+     Transform moves are never AI-picked — boss phase changes are forced by
+     an HP threshold in battle.js. */
+  function aiPick(moves, ai, rng) {
     const w = [];
-    const add = (id, weight) => { if ((ai.pp[id] || 0) > 0 && weight > 0) w.push([id, weight]); };
-    add('TACKLE', 0.40);
-    add('CINDER', 0.35);
-    add('GROWL', (ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.25);
-    if (!w.length) return 'TACKLE'; // struggle-ish fallback
+    for (const id of moves) {
+      const mv = MOVES[id];
+      if (!mv || (ai.pp[id] || 0) <= 0 || mv.effect === 'transform') continue;
+      let weight;
+      if (mv.effect === 'atkDown') weight = (ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.22;
+      else weight = 0.4 + (mv.power || 0) / 220; // favor stronger moves
+      if (weight > 0) w.push([id, weight]);
+    }
+    if (!w.length) {
+      for (const id of moves) if ((ai.pp[id] || 0) > 0 && MOVES[id] && MOVES[id].effect !== 'transform') return id;
+      return moves[0];
+    }
     let total = 0;
     for (const [, weight] of w) total += weight;
     let roll = rng() * total;
@@ -2244,8 +2443,8 @@ const BData = (() => {
   }
 
   const MSG = {
-    intro1: 'Camper REX would like to battle!',
-    intro2: 'Camper REX sent out MAGMULE!',
+    challenge: '{T} would like to battle!',
+    sentOut: '{T} sent out {M}!',
     go: 'Go! {A}!',
     comeBack: '{A}, come back!',
     used: '{A} used {M}!',
@@ -2266,28 +2465,47 @@ const BData = (() => {
     fled: 'You got away safely!',
     choose: 'Choose your next ally!',
     faint: '{A} fainted!',
-    win1: 'You defeated Camper REX!',
-    win2: 'REX: Whoa! Your team is scrappier than it looks!',
-    win3: '{A} gained 135 EXP. Points!',
+    win1: 'You defeated {T}!',
+    win3: '{A} gained {E} EXP. Points!',
     lose1: 'You have no creatures that can fight!',
     lose2: 'You blacked out!',
+    // dungeon boss
+    bossAppear1: 'The air splits with a deafening shriek...',
+    bossAppear2: 'Something vast stirs atop the rift-cliff!',
+    bossReveal: 'VORNETH looms over you from the cliff!',
+    bossWin1: 'The rift shudders and goes dark...',
+    bossWin2: 'You drove VORNETH back into the void!',
+    transform1: '{A} is convulsing with dark power!',
+    transform2: '{A} awakened into {B}!',
   };
 
   const fmt = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k]) !== undefined ? vars[k] : '{' + k + '}');
 
-  // overworld dialogue
+  // overworld dialogue, keyed by NPC id (intro before first battle, rematch
+  // before later ones, beaten once defeated). portal/boss are special.
   const DIALOGUE = {
-    first: [
-      'REX: Hey! You stomped right through my camp!',
-      'REX: My MAGMULE and I will teach you some manners!',
-    ],
-    rematch: [
-      'REX: Back for more? MAGMULE is all fired up!',
-    ],
-    beaten: [
-      'REX: Whew... MAGMULE needs a nap after that one.',
-      'REX: Come back any time for a rematch!',
-    ],
+    rex: {
+      intro: ['REX: Hey! You stomped right through my camp!', 'REX: My MAGMULE will teach you some manners!'],
+      rematch: ['REX: Back for more? MAGMULE is all fired up!'],
+      beaten: ['REX: Whew... that was a scrap.', "REX: That rift past the ridge? Don't face it unprepared."],
+    },
+    hiker: {
+      intro: ['HIKER DALE: These woods go on forever, kid.', 'DALE: Prove you can handle a real climb!'],
+      rematch: ['DALE: Round two? My THORNLET is ready!'],
+      beaten: ['DALE: Hah! You have got the legs for this trail.'],
+    },
+    lass: {
+      intro: ['LASS IVY: Ooh, a challenger!', 'IVY: My EMBERIK runs hot. Watch out!'],
+      rematch: ['IVY: Let us dance again!'],
+      beaten: ['IVY: So warm... so strong. Well played!'],
+    },
+    ace: {
+      intro: ['ACE KORU: You reek of easy battles.', 'KORU: Show me something worth my time.'],
+      rematch: ['KORU: Again. Do not bore me.'],
+      beaten: ['KORU: ...Impressive. The rift may not break you after all.'],
+    },
+    portal: ['A jagged rift claws at the air, pulsing with cold light.', 'Step into the darkness?'],
+    portalDone: ['The rift is silent now. Only embers drift through it.'],
   };
 
   return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick, MSG, fmt, DIALOGUE };
@@ -2317,6 +2535,11 @@ const Battle = (() => {
 
   const DEFAULT_SHOT = { pos: [-3.80, 1.30, -2.53], look: [1.93, 0.21, 1.35], fov: 40 };
 
+  // Dungeon: the boss towers atop a cliff and the camera shoots from low,
+  // tilted UP at it (Dynamax/Gigantamax-style framing) — dungeon-only.
+  const BOSS_POS = [2.62, 3.38, 4.23];
+  const DUNGEON_SHOT = { pos: [-1.85, 0.65, -4.30], look: [2.62, 3.95, 4.23], fov: 50 };
+
   const ENV = {
     sky: M3.hex('#0d1522'),
     fog: M3.hex('#13201a'), fogNear: 7.5, fogFar: 17,
@@ -2324,18 +2547,33 @@ const Battle = (() => {
     lightCol: [0.74, 0.66, 0.55],
     ambient: [0.42, 0.50, 0.46],
   };
+  // intimidating rift dungeon: near-black sky, cold violet fog + light
+  const DUNGEON_ENV = {
+    sky: M3.hex('#070310'),
+    fog: M3.hex('#1a0a26'), fogNear: 8, fogFar: 28,
+    lightDir: M3.normalize([], [-0.3, -0.7, -0.2]),
+    lightCol: [0.58, 0.42, 0.74],
+    ambient: [0.34, 0.26, 0.46],
+  };
 
   const SPAWN_THEMES = {
     PIXLIT:   [[1, 1, 1], [1, 0.55, 0.8], [0.7, 0.9, 1]],
     THORNLET: [[1, 1, 1], [0.55, 0.95, 0.4], [0.3, 0.75, 0.3]],
     EMBERIK:  [[1, 1, 1], [1, 0.72, 0.2], [1, 0.48, 0.16]],
     MAGMULE:  [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
+    VORNETH:  [[1, 1, 1], [0.72, 0.34, 1], [0.5, 0.12, 0.7]],
+    VORNETH_X:[[1, 1, 1], [0.92, 0.4, 1], [0.6, 0.15, 0.85]],
   };
   const themeOf = (id) => SPAWN_THEMES[id] || SPAWN_THEMES.MAGMULE;
   const modelOf = (id) => id.toLowerCase();
 
   // ----------------------------------------------------------- state
-  let staticH = null;          // merged scenery handle
+  let staticH = null;          // merged grove scenery handle
+  let dungeonH = null;         // merged dungeon scenery handle
+  let arena = 'grove';         // 'grove' | 'dungeon'
+  let curEnv = ENV, curStatic = null, defShot = DEFAULT_SHOT;
+  let curEnemy = null;         // descriptor passed to enter() (npcId/trainer/isBoss)
+  let ashT = 0, riftT = 0;     // dungeon ambient timers
   let player = null, enemy = null, rex = null; // actors
   let pParty = [];             // combat states for the whole player party
   let activeIdx = 0;
@@ -2428,7 +2666,29 @@ const Battle = (() => {
 
   // camera shots ----------------------------------------------------------
   function camDefault(ms) {
-    Cam.play([{ t: ms || 650, pos: DEFAULT_SHOT.pos, look: DEFAULT_SHOT.look, fov: 40, ease: 'outCubic' }]);
+    Cam.play([{ t: ms || 650, pos: defShot.pos, look: defShot.look, fov: defShot.fov, ease: 'outCubic' }]);
+  }
+  // low crane circling up toward the (elevated) transforming actor
+  function camTransform(side) {
+    const a = sideActor(side);
+    const up = a.pos[1] + a.height * 0.5;
+    Cam.play([
+      { t: 500, pos: [a.pos[0] - DIR_PM[0] * 3.2 + PERP[0] * 1.2, 0.5, a.pos[2] - DIR_PM[2] * 3.2 + PERP[2] * 1.2],
+        look: [a.pos[0], up, a.pos[2]], fov: 52, ease: 'inOutCubic' },
+      { t: 1700, pos: [a.pos[0] - DIR_PM[0] * 2.6 - PERP[0] * 1.0, 0.35, a.pos[2] - DIR_PM[2] * 2.6 - PERP[2] * 1.0],
+        look: [a.pos[0], up, a.pos[2]], fov: 48, ease: 'inOutCubic' },
+    ]);
+  }
+  // sweeping reveal orbit after the awakened form appears
+  function camTransformReveal(side) {
+    const a = sideActor(side);
+    const up = a.pos[1] + a.height * 0.55;
+    Cam.play([
+      { t: 700, pos: [a.pos[0] - DIR_PM[0] * 4.2 + PERP[0] * 2.2, 0.6, a.pos[2] - DIR_PM[2] * 4.2 + PERP[2] * 2.2],
+        look: [a.pos[0], up, a.pos[2]], fov: 50, ease: 'outCubic' },
+      { t: 1500, pos: [a.pos[0] - DIR_PM[0] * 3.8, 1.0, a.pos[2] - DIR_PM[2] * 3.8],
+        look: [a.pos[0], up, a.pos[2]], fov: 47, ease: 'inOutCubic' },
+    ]);
   }
   function camAtk(s) {
     const u = sideActor(s), v = sideActor(other(s));
@@ -2591,9 +2851,9 @@ const Battle = (() => {
     }
     yield 230;
     // stronger touchdown: twin rings + dust kick
-    Fx.ring([base[0], 0.06, base[2]], { r0: 0.18, r1: 1.1, n: 18, life: 0.44, colors: [[1, 1, 1], theme[1]], s: 0.055 });
-    Fx.ring([base[0], 0.04, base[2]], { r0: 0.1, r1: 0.7, n: 12, life: 0.34, colors: [tint], s: 0.045 });
-    Fx.burst([base[0], 0.1, base[2]], {
+    Fx.ring([base[0], base[1] + 0.06, base[2]], { r0: 0.18, r1: 1.1, n: 18, life: 0.44, colors: [[1, 1, 1], theme[1]], s: 0.055 });
+    Fx.ring([base[0], base[1] + 0.04, base[2]], { r0: 0.1, r1: 0.7, n: 12, life: 0.34, colors: [tint], s: 0.045 });
+    Fx.burst([base[0], base[1] + 0.1, base[2]], {
       n: 16, speed: 1.7, up: 1.2, g: -5, drag: 2,
       colors: [theme[1], [0.45, 0.4, 0.34], [0.6, 0.55, 0.45]], life: 0.45, s: 0.05,
     });
@@ -3006,8 +3266,101 @@ const Battle = (() => {
     camDefault();
   }
 
+  /* VOID LANCE — boss-tier beam: a triple-layer lance (wide void glow +
+     mid + white core), heavy charge, sustained slow-mo + violet screen
+     flash, twin shockwaves. Grander than any other monster's beam. */
+  function* kindVoidbeam(s, res, move) {
+    const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
+    const fx = move.fx, tint = flashTint(fx);
+    camSweep(s);
+    Sfx.play('charge'); Sfx.play('rift');
+    const hp = head(u, 0.8);
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 4;
+      Fx.spawn({ p: [hp[0] + Math.cos(a) * 0.7, hp[1] + (i % 5) * 0.12 - 0.25, hp[2] + Math.sin(a) * 0.7], c: fx[i % fx.length],
+                 v: [-Math.cos(a) * 2.1, 0, -Math.sin(a) * 2.1], life: 0.34, s: 0.055, s1: 0.012 });
+      if (i % 6 === 5) yield 54;
+    }
+    Fx.burst(hp, { n: 10, speed: 0.5, colors: [tint, [1, 1, 1]], life: 0.3, s: 0.07 });
+    tw3(u.scl, [1.1, 1.14, 1.1], 220, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
+    yield 220;
+    if (!res.miss) {
+      Sfx.play('beam'); Sfx.play('zap');
+      const tgt = chest(v);
+      Fx.beam(hp, tgt, 700, { rate: 7, colors: fx, jitter: 0.2, s: 0.12 });
+      Fx.beam(hp, tgt, 700, { rate: 8, colors: [fx[0], tint], jitter: 0.1, s: 0.08 });
+      Fx.beam(hp, tgt, 700, { rate: 9, colors: [[1, 1, 1]], jitter: 0.04, s: 0.05 });
+      Fx.addTrauma(0.4); Cam.kickFov(-6, 700);
+      for (let i = 0; i < 3; i++) { v.flashT = 0.2; Sfx.play('zap'); yield 150; }
+      applyDamage(vs, res.dmg);
+      Sfx.play('boom');
+      Fx.hitstop(120); Fx.slowmo(420, 0.32);
+      Fx.flash(110, 0.95, tint); Fx.addTrauma(0.7); Cam.kickFov(9, 200);
+      v.flashT = 0.4;
+      Fx.burst(tgt, { n: 46, speed: 3.8, colors: fx, life: 0.66, g: -3 });
+      Fx.ring(tgt, { r0: 0.2, r1: 1.9, n: 22, life: 0.5, colors: [tint, fx[0]], s: 0.08 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 1.3, n: 16, life: 0.44, colors: [fx[fx.length - 1]], s: 0.06 });
+      camImpact(other(s));
+      const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
+      tw3(v.offset, [d[0] * 0.5, 0, d[2] * 0.5], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 420, 'outBack'));
+      tw3(v.scl, [1.14, 0.84, 1.14], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 400, 'outBack'));
+      yield 420;
+      yield drained(vs);
+    } else { Sfx.play('beam'); Fx.beam(hp, [v.pos[0] + 1.4, v.pos[1] + 0.4, v.pos[2] + 1.2], 420, { rate: 6, colors: fx, jitter: 0.12, s: 0.08 }); yield 480; }
+    tw3(u.scl, [1, 1, 1], 200, 'outQuad');
+    camDefault();
+  }
+
+  /* DREAD WAVE / ABYSS NOVA — boss-tier nova: a collapsing void orb hurled
+     to the target, an implosion, then a massive abyssal detonation with
+     deep slow-mo, violet flash and triple shockwaves. */
+  function* kindVoidnova(s, res, move) {
+    const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
+    const fx = move.fx, tint = flashTint(fx);
+    camSweep(s);
+    Sfx.play('charge'); Sfx.play('rift');
+    const core = head(u, 0.7);
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2, r = 1.0 - i * 0.03;
+      Fx.spawn({ p: [core[0] + Math.cos(a) * r, core[1] + Math.sin(i * 1.7) * 0.3, core[2] + Math.sin(a) * r], c: fx[i % fx.length],
+                 v: [-Math.cos(a) * 2.2, 0, -Math.sin(a) * 2.2], life: 0.3, s: 0.06, s1: 0.015 });
+      if (i % 4 === 3) { Sfx.play('zap'); yield 52; }
+    }
+    tw3(u.scl, [1.12, 1.16, 1.12], 240, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
+    yield 200;
+    if (!res.miss) {
+      const tgt = chest(v);
+      Sfx.play('whoosh');
+      for (let i = 0; i < 12; i++)
+        Fx.spawn({ p: core.slice(), c: fx[i % fx.length],
+                   v: [(tgt[0] - core[0]) / 0.32, (tgt[1] - core[1]) / 0.32 + 0.4, (tgt[2] - core[2]) / 0.32], g: -3, life: 0.32, s: 0.09, s1: 0.05 });
+      yield 300;
+      applyDamage(vs, res.dmg);
+      Sfx.play('boom'); Sfx.play('quake');
+      Fx.hitstop(140); Fx.slowmo(520, 0.3);
+      Fx.flash(120, 1.0, tint); Fx.addTrauma(0.85); Cam.kickFov(11, 220);
+      v.flashT = 0.45;
+      for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, r = 1.6;
+        Fx.spawn({ p: [v.pos[0] + Math.cos(a) * r, tgt[1] + (Math.random() - 0.5), v.pos[2] + Math.sin(a) * r], c: fx[i % fx.length],
+                   v: [-Math.cos(a) * 5, 0, -Math.sin(a) * 5], life: 0.22, s: 0.07, s1: 0.02 }); }
+      yield 200;
+      Sfx.play('boom');
+      Fx.burst(tgt, { n: 56, speed: 4.4, colors: fx, life: 0.75, g: -3.4 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 2.4, n: 26, life: 0.55, colors: [tint, fx[0]], s: 0.09 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 1.9, n: 20, life: 0.5, colors: [fx[fx.length - 1], [0.3, 0.1, 0.5]], s: 0.07 });
+      camImpact(other(s));
+      const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
+      tw3(v.offset, [d[0] * 0.7, 0, d[2] * 0.7], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 460, 'outBack'));
+      tw3(v.scl, [1.18, 0.8, 1.18], 160, 'outQuad', () => tw3(v.scl, [1, 1, 1], 430, 'outBack'));
+      yield 480;
+      yield drained(vs);
+    } else { Fx.burst([v.pos[0] + 1.2, v.pos[1], v.pos[2] + 1.0], { n: 12, speed: 2.4, colors: fx, life: 0.5 }); yield 460; }
+    camDefault();
+  }
+
   const ANIM_KINDS = {
     dash: kindDash, rings: kindRings, beam: kindBeam, orb: kindOrb, volley: kindVolley, cinder: kindCinder,
+    voidbeam: kindVoidbeam, voidnova: kindVoidnova,
   };
 
   // ----------------------------------------------------------- turn logic
@@ -3020,6 +3373,7 @@ const Battle = (() => {
       const i = st.moves.indexOf(moveId);
       if (i >= 0) st.pp[i] -= 1;
     } else eState.epp[moveId] -= 1;
+    if (move.effect === 'transform') { yield* transformSeq(s); return; }
     const res = move.power
       ? BData.damage({ level: st.level, atk: st.stats.atk, atkStage: st.atkStage },
                      { def: os.stats.def, defStage: 0 }, move, rngBattle)
@@ -3067,12 +3421,13 @@ const Battle = (() => {
   }
 
   function* victorySeq() {
+    const boss = !!(curEnemy && curEnemy.isBoss);
     camVictory();
     Sfx.play('victory');
-    yield* say(BData.MSG.win1);
-    yield* say(BData.MSG.win2);
+    yield* say(BData.fmt(BData.MSG.win1, { T: (curEnemy && curEnemy.trainer) || eState.name }));
+    if (boss) { yield* say(BData.MSG.bossWin1); yield* say(BData.MSG.bossWin2); }
     expTween = { from: expFrac, to: 0.78, t: 0, dur: 0.8 };
-    yield* say(BData.fmt(BData.MSG.win3, { A: pState.name }));
+    yield* say(BData.fmt(BData.MSG.win3, { A: pState.name, E: boss ? '600' : '135' }));
     yield 250;
     endBattle('win');
   }
@@ -3084,10 +3439,116 @@ const Battle = (() => {
     endBattle('loss');
   }
 
+  // ---------------------------------------------------- boss transformation
+  // swap a combatant's form in place (stats/moves/pp/name + actor model),
+  // preserving its current HP fraction. Returns the pre-transform name.
+  function transformForm(side) {
+    const st = sideState(side), a = sideActor(side);
+    const sp = BData.SPECIES[st.id];
+    const nid = sp && sp.form2;
+    if (!nid) return st.name;
+    const oldName = st.name, nsp = BData.SPECIES[nid];
+    const frac = st.hp / st.stats.maxHp;
+    st.id = nid; st.name = nsp.name;
+    st.stats = BData.statsFor(nid, st.level);
+    st.hp = Math.max(1, Math.round(st.stats.maxHp * frac));
+    st.displayHp = st.hp;
+    st.atkStage = 0;
+    st.moves = nsp.moves.slice();
+    if (side === 'P') st.pp = nsp.moves.map((id) => BData.MOVES[id].pp);
+    else { st.epp = {}; for (const id of nsp.moves) st.epp[id] = BData.MOVES[id].pp; }
+    st.form = 1;
+    const nm = Models.get(modelOf(nid));
+    a.h = Game.handle(modelOf(nid));
+    a.centers = nm.centers;
+    a.height = nm.height;
+    return oldName;
+  }
+
+  /* THE CLIMAX — the grandest sequence in the game. Sustained bullet-time:
+     dark energy spirals in, a void pillar erupts and engulfs the beast, the
+     form swaps inside the cocoon, then it unfurls at full awakened size with
+     triple shockwaves, a screen-filling flash and a sweeping reveal orbit. */
+  function* transformSeq(side) {
+    const a = sideActor(side), st = sideState(side);
+    const VIO = [0.7, 0.3, 1], MAG = [0.95, 0.4, 1], DK = [0.3, 0.1, 0.5], W = [1, 1, 1];
+    Cam.idleDrift(false);
+    yield* say(BData.fmt(BData.MSG.transform1, { A: st.name }), { auto: true, hold: 220 });
+    camTransform(side);
+    Sfx.play('roar'); Sfx.play('rift');
+    Fx.slowmo(2600, 0.4); // sustained slow-mo across the whole climax
+    const c0 = chest(a);
+    for (let i = 0; i < 22; i++) {
+      const ang = i * 0.9, r = 2.4 - i * 0.08;
+      const px = a.pos[0] + Math.cos(ang) * r, py = a.pos[1] + 0.2 + i * 0.1, pz = a.pos[2] + Math.sin(ang) * r;
+      Fx.spawn({ p: [px, py, pz], c: [VIO, MAG, W][i % 3], v: [(c0[0] - px) * 3, (c0[1] - py) * 2.2, (c0[2] - pz) * 3], life: 0.42, s: 0.06, s1: 0.02 });
+      if (i % 4 === 3) { Fx.addTrauma(0.22); Sfx.play('zap'); yield 70; }
+    }
+    Fx.ring([a.pos[0], a.pos[1] + 0.05, a.pos[2]], { r0: 0.2, r1: 2.4, n: 26, life: 0.6, colors: [VIO, DK], s: 0.09 });
+    tw3(a.scl, [1.22, 1.3, 1.22], 400, 'outQuad');
+    yield 260;
+    // eruption — void pillar engulfs it, screen flash, hard hitstop
+    Sfx.play('boom'); Sfx.play('quake');
+    Fx.hitstop(170); Fx.flash(170, 1.0, MAG); Fx.addTrauma(0.95); Cam.kickFov(13, 320);
+    for (let i = 0; i < 44; i++) {
+      const ang = Math.random() * Math.PI * 2, rr = Math.random() * 0.7;
+      Fx.spawn({ p: [a.pos[0] + Math.cos(ang) * rr, a.pos[1] + 0.1, a.pos[2] + Math.sin(ang) * rr], c: [VIO, MAG, W, DK][i % 4],
+                 v: [Math.cos(ang) * 1.3, 6 + Math.random() * 4.5, Math.sin(ang) * 1.3], g: -3, drag: 0.2, life: 0.75, s: 0.1, s1: 0.03 });
+    }
+    a.visible = false;
+    yield 420;
+    // swap form inside the cocoon, then unfurl at full awakened size
+    const oldName = transformForm(side);
+    Sfx.play('spawn'); Sfx.play('roar');
+    Fx.flash(190, 1.0, W); Fx.slowmo(800, 0.32);
+    a.visible = true;
+    a.scl = [0.35, 0.35, 0.35];
+    tw3(a.scl, [1, 1, 1], 760, 'outElastic');
+    Cam.kickFov(-9, 600);
+    const m = M3.trs(M3.mat(), a.pos, [a.yaw, 0, 0], [1, 1, 1]);
+    const cs = a.centers, step = Math.max(1, Math.floor(cs.length / 44)), tmp = [0, 0, 0];
+    for (let i = 0; i < cs.length; i += step) {
+      M3.transformPoint(tmp, m, cs[i].p);
+      Fx.spawn({ p: [tmp[0], tmp[1], tmp[2]], c: [MAG, VIO, W][(i / step | 0) % 3],
+                 v: [(Math.random() - 0.5) * 0.8, 0.4 + Math.random() * 0.6, (Math.random() - 0.5) * 0.8], g: -0.5, drag: 0.4, life: 0.6, s: 0.05, s1: 0.008 });
+    }
+    Fx.ring([a.pos[0], a.pos[1] + 0.5, a.pos[2]], { r0: 0.3, r1: 3.0, n: 30, life: 0.7, colors: [MAG, W], s: 0.1 });
+    Fx.ring([a.pos[0], a.pos[1] + 0.05, a.pos[2]], { r0: 0.4, r1: 2.6, n: 24, life: 0.6, colors: [VIO, DK], s: 0.08 });
+    Fx.addTrauma(0.7);
+    yield 560;
+    // reveal roar + sweeping orbit
+    Sfx.play('roar'); Sfx.play('boom');
+    Fx.burst(head(a, 0.7), { n: 32, speed: 3.2, colors: [MAG, VIO, W], life: 0.75, g: -2 });
+    Fx.addTrauma(0.4);
+    camTransformReveal(side);
+    yield 760;
+    yield* say(BData.fmt(BData.MSG.transform2, { A: oldName, B: st.name }), { auto: true, hold: 340 });
+    camDefault();
+  }
+
+  // grander materialize for the boss's dungeon entrance
+  function* spawnInBoss(a) {
+    Sfx.play('rift'); Sfx.play('quake');
+    Fx.flash(120, 0.6, [0.7, 0.3, 1]);
+    Fx.addTrauma(0.4);
+    for (let i = 0; i < 30; i++) {
+      const ang = Math.random() * Math.PI * 2, rr = Math.random() * 0.9;
+      Fx.spawn({ p: [a.pos[0] + Math.cos(ang) * rr, a.pos[1] + 0.1, a.pos[2] + Math.sin(ang) * rr], c: [[0.7, 0.3, 1], [0.95, 0.4, 1], [1, 1, 1]][i % 3],
+                 v: [Math.cos(ang) * 1.2, 4 + Math.random() * 4, Math.sin(ang) * 1.2], g: -3, drag: 0.2, life: 0.8, s: 0.1, s1: 0.03 });
+    }
+    yield 240;
+    yield* spawnIn(a, themeOf('VORNETH'));
+  }
+
   // enemy's half of a turn. Returns false if the battle ended.
   function* enemyTurn() {
     if (eState.hp <= 0) return true;
-    const mv = BData.aiPick({ atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
+    // boss phase change: the first time it drops below the threshold, it awakens
+    if (eState.isBoss && eState.form === 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
+      yield* transformSeq('E');
+      return true; // the transformation is the boss's action this turn
+    }
+    const mv = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
     yield* doMove('E', mv);
     if (pState.hp <= 0) {
       yield* faintSeq('P');
@@ -3237,7 +3698,7 @@ const Battle = (() => {
     camBallClose(ground);
     yield 480;
     // wobble drama
-    const success = rngBattle() < BData.captureChance(eState.hp / eState.stats.maxHp);
+    const success = rngBattle() < BData.captureChance(eState.hp / eState.stats.maxHp, eState.isBoss);
     const wobbles = success ? 3 : 1 + Math.floor(rngBattle() * 2);
     for (let i = 0; i < wobbles; i++) {
       Sfx.play('cursor');
@@ -3265,7 +3726,7 @@ const Battle = (() => {
       Sfx.play('victory');
       yield 700;
       yield* say(BData.fmt(BData.MSG.caught, { A: eState.name }));
-      Game.save.party.push({ species: eState.id, level: eState.level, hp: Math.max(1, eState.hp) });
+      Game.save.party.push({ species: eState.baseId || eState.id, level: eState.level, hp: Math.max(1, eState.hp) });
       yield* say(BData.fmt(BData.MSG.joined, { A: eState.name }));
       ball.visible = false;
       endBattle('capture');
@@ -3334,11 +3795,16 @@ const Battle = (() => {
     }
     // attack: both sides act in speed order
     const playerMove = pState.moves[action.idx];
-    const enemyMove = BData.aiPick({ atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
+    const enemyMove = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
     const pFirst = pState.stats.spe === eState.stats.spe ? rngBattle() < 0.5 : pState.stats.spe > eState.stats.spe;
     const order = pFirst ? [['P', playerMove], ['E', enemyMove]] : [['E', enemyMove], ['P', playerMove]];
     for (const [s, mv] of order) {
       if (sideState(s).hp <= 0) continue;
+      // boss reacts by awakening the first time it drops below its threshold
+      if (s === 'E' && eState.isBoss && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
+        yield* transformSeq('E');
+        continue;
+      }
       yield* doMove(s, mv);
       const victim = other(s);
       if (sideState(victim).hp <= 0) {
@@ -3353,9 +3819,24 @@ const Battle = (() => {
 
   function* introScript() {
     yield 650; // let the transition reveal finish before the first message
-    yield* say(BData.MSG.intro1);
-    yield* say(BData.MSG.intro2, { auto: true, hold: 120 });
-    yield* spawnIn(enemy, themeOf('MAGMULE'));
+    if (curEnemy && curEnemy.isBoss) { yield* introBoss(); return; }
+    yield* say(BData.fmt(BData.MSG.challenge, { T: curEnemy.trainer }));
+    yield* say(BData.fmt(BData.MSG.sentOut, { T: curEnemy.trainer, M: eState.name }), { auto: true, hold: 120 });
+    yield* spawnIn(enemy, themeOf(eState.id));
+    yield 150;
+    yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
+    yield* spawnIn(player, themeOf(pState.id));
+    yield 200;
+    backToMenu();
+  }
+
+  // epic dungeon entrance: the boss looms in atop the cliff through the rift
+  function* introBoss() {
+    yield* say(BData.MSG.bossAppear1);
+    yield* say(BData.MSG.bossAppear2, { auto: true, hold: 200 });
+    Cam.play([{ t: 1400, pos: DUNGEON_SHOT.pos, look: DUNGEON_SHOT.look, fov: DUNGEON_SHOT.fov, ease: 'inOutCubic' }]);
+    yield* spawnInBoss(enemy);
+    yield* say(BData.MSG.bossReveal, { auto: true, hold: 220 });
     yield 150;
     yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
     yield* spawnIn(player, themeOf(pState.id));
@@ -3398,8 +3879,7 @@ const Battle = (() => {
     mode = 'none';
     for (let i = 0; i < pParty.length; i++)
       Game.save.party[i].hp = result === 'loss' ? null : pParty[i].hp;
-    if (result === 'win' || result === 'capture') Game.save.beaten = true;
-    Game.toOverworld(result);
+    Game.onBattleEnd(result, curEnemy);
   }
 
   let rngLocal = M3.rng(99);
@@ -3455,15 +3935,57 @@ const Battle = (() => {
     staticH = Gfx.upload({ data, count: total });
   }
 
+  // dark rift dungeon: obsidian floor, the boss's cliff, a looming portal
+  // backdrop, and a ring of jagged spires.
+  function buildDungeon() {
+    if (dungeonH) return;
+    const parts = [];
+    const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
+    const ground = Models.groundMesh({
+      radius: 16, dark: true,
+      patches: [
+        { x: P_POS[0], z: P_POS[2], rx: 1.2, rz: 0.9, rot: 0.3 },
+        { x: BOSS_POS[0], z: BOSS_POS[2], rx: 2.8, rz: 2.8, rot: 0 },
+      ],
+    });
+    push('cliff', [BOSS_POS[0], 0, BOSS_POS[2]], 0.2, 1.0);                       // boss perch
+    push('portal', [BOSS_POS[0] + 0.4, 1.4, BOSS_POS[2] + 3.0], YAW_M, 2.1);      // looming rift backdrop
+    const r = M3.rng(909);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + r() * 0.2, rad = 11 + r() * 3;
+      push('spire', [Math.cos(a) * rad, 0, Math.sin(a) * rad], r() * 6.3, 0.8 + r() * 1.1);
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = r() * Math.PI * 2, rad = 4 + r() * 5;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      if (Math.hypot(x - P_POS[0], z - P_POS[2]) < 2.0) continue;
+      if (Math.hypot(x - BOSS_POS[0], z - BOSS_POS[2]) < 3.2) continue;
+      push('spire', [x, 0, z], r() * 6.3, 0.4 + r() * 0.5);
+    }
+    let total = ground.count;
+    for (const p of parts) total += p.m.count;
+    const data = new Float32Array(total * 9);
+    data.set(ground.data, 0);
+    let off = ground.count * 9;
+    for (const p of parts)
+      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    dungeonH = Gfx.upload({ data, count: total });
+  }
+
   // ----------------------------------------------------------- scene API
   function enter(params) {
     params = params || {};
-    buildStatic();
     Fx.clear();
     t = 0;
     tw = UI.typewriter();
     rngBattle = M3.rng((Math.random() * 1e9) | 0);
     rngLocal = M3.rng((Math.random() * 1e9) | 0);
+
+    curEnemy = params.enemy || { species: 'MAGMULE', level: 15, trainer: 'Camper REX', npcId: 'rex' };
+    arena = params.arena || 'grove';
+    if (arena === 'dungeon') { buildDungeon(); curStatic = dungeonH; curEnv = DUNGEON_ENV; defShot = DUNGEON_SHOT; }
+    else { buildStatic(); curStatic = staticH; curEnv = ENV; defShot = DEFAULT_SHOT; }
+    ashT = 0.4; riftT = 1.2;
 
     // build party combat states from the save
     pParty = Game.save.party.map((m) => {
@@ -3472,19 +3994,25 @@ const Battle = (() => {
       const hp = m.hp === null || m.hp === undefined ? stats.maxHp : M3.clamp(m.hp, 0, stats.maxHp);
       const pp = (sp.ppInit || sp.moves.map((id) => BData.MOVES[id].pp)).slice();
       return { id: m.species, name: sp.name, level: m.level, stats,
-               hp, displayHp: hp, drainRate: 60, atkStage: 0,
+               hp, displayHp: hp, drainRate: 60, atkStage: 0, form: 0,
                moves: sp.moves.slice(), pp };
     });
     activeIdx = Math.max(0, pParty.findIndex((m) => m.hp > 0));
     pState = pParty[activeIdx];
 
-    const eStats = BData.statsFor('MAGMULE', 15);
-    eState = { id: 'MAGMULE', name: 'MAGMULE', level: 15, stats: eStats, hp: eStats.maxHp, displayHp: eStats.maxHp,
-               drainRate: 60, atkStage: 0, epp: { TACKLE: 35, CINDER: 25, GROWL: 30 } };
+    // enemy combat state from the descriptor (any species; boss-aware)
+    const eId = curEnemy.species, eLv = curEnemy.level || 15;
+    const esp = BData.SPECIES[eId];
+    const eStats = BData.statsFor(eId, eLv);
+    const epp = {}; for (const id of esp.moves) epp[id] = BData.MOVES[id].pp;
+    eState = { id: eId, baseId: eId, name: esp.name, level: eLv, stats: eStats,
+               hp: eStats.maxHp, displayHp: eStats.maxHp, drainRate: 60, atkStage: 0,
+               moves: esp.moves.slice(), epp, isBoss: !!curEnemy.isBoss, form: 0, threshold: 0.55 };
 
+    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
-    enemy = actor('magmule', M_POS, YAW_M);
-    rex = actor('rex_raised', REX_POS, YAW_M + 0.15);
+    enemy = actor(modelOf(eId), ePos, YAW_M);
+    rex = actor(curEnemy.trainerModel || 'rex_raised', REX_POS, YAW_M + 0.15);
     items = { heal: BData.ITEMS.heal.uses, cure: BData.ITEMS.cure.uses };
     expFrac = 0.30; expTween = null;
     topCursor = 0; moveCursor = 0; itemCursor = 0; partyCursor = 0;
@@ -3496,13 +4024,17 @@ const Battle = (() => {
       mode = 'none';
       player.visible = enemy.visible = true;
       fly = { yaw: YAW_P, pitch: -0.12 };
-      Cam.cut(DEFAULT_SHOT.pos, DEFAULT_SHOT.look, 40);
+      Cam.cut(defShot.pos, defShot.look, defShot.fov);
     } else {
       state = 'INTRO';
       mode = 'none';
       player.visible = enemy.visible = false;
-      Cam.cut([4.8, 3.1, 6.6], [0, 0.9, 0.2], 44);
-      Cam.play([{ t: 2300, pos: DEFAULT_SHOT.pos, look: DEFAULT_SHOT.look, fov: 40, ease: 'inOutCubic' }]);
+      if (arena === 'dungeon')
+        Cam.cut([P_POS[0] - DIR_PM[0] * 1.0, 0.4, P_POS[2] - DIR_PM[2] * 1.0], [BOSS_POS[0], 2.0, BOSS_POS[2]], 56);
+      else {
+        Cam.cut([4.8, 3.1, 6.6], [0, 0.9, 0.2], 44);
+        Cam.play([{ t: 2300, pos: defShot.pos, look: defShot.look, fov: defShot.fov, ease: 'inOutCubic' }]);
+      }
       run(introScript());
     }
   }
@@ -3687,6 +4219,23 @@ const Battle = (() => {
       }
     }
 
+    // dungeon atmosphere: drifting ash, periodic void-lightning + rift pulses
+    if (arena === 'dungeon' && state !== 'DONE') {
+      ashT -= dt;
+      if (ashT <= 0) {
+        ashT = 0.05;
+        Fx.spawn({ p: [(Math.random() - 0.5) * 16, 7, (Math.random() - 0.5) * 10 + 3], c: [0.5, 0.3, 0.7],
+                   v: [0, -1.4 - Math.random(), 0], drag: 0.1, life: 2.2, s: 0.03, s1: 0.01 });
+      }
+      riftT -= dt;
+      if (riftT <= 0) {
+        riftT = 2.4 + Math.random() * 3;
+        Fx.flash(110, 0.22, [0.6, 0.3, 0.95]);
+        Fx.addTrauma(0.1);
+        Fx.burst([BOSS_POS[0], BOSS_POS[1] + 1.5, BOSS_POS[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
+      }
+    }
+
     if (state === 'MENU') updateMenu();
     else if (awaitParty) handlePartyNav(true);
     else if (state === 'FLY') updateFly(rawDt);
@@ -3694,11 +4243,11 @@ const Battle = (() => {
 
   function render3d(aspect) {
     const { view, proj } = Cam.matrices(aspect);
-    Gfx.begin(view, proj, ENV);
-    Gfx.draw(staticH, null, {});
+    Gfx.begin(view, proj, curEnv);
+    Gfx.draw(curStatic, null, {});
     if (enemy.visible) Gfx.draw(enemy.h, actorMat(enemy), { flash: enemy.flashT > 0 ? M3.clamp(enemy.flashT / 0.25, 0, 1) : 0 });
     if (player.visible) Gfx.draw(player.h, actorMat(player), { flash: player.flashT > 0 ? M3.clamp(player.flashT / 0.25, 0, 1) : 0 });
-    Gfx.draw(rex.h, actorMat(rex), {});
+    if (arena === 'grove') Gfx.draw(rex.h, actorMat(rex), {});
     if (ball.visible)
       Gfx.draw(Game.handle('ball'), M3.trs(mTmp2, ball.pos, ball.rot, ball.scl), {});
     const pd = Fx.particleData();
@@ -3764,74 +4313,98 @@ const Battle = (() => {
 </script>
 <script>
 /* Grove Clash — js/overworld.js
-   Overworld: walkable forest clearing at dusk. WASD movement with a
-   smooth third-person follow camera, circle collision, Camper REX as
-   an interactable NPC (dialogue -> battle transition), campfire embers
-   and wandering fireflies for atmosphere. */
+   Overworld: a large walkable forest at dusk. WASD movement with a smooth
+   third-person follow camera and circle collision. Several trainer NPCs
+   are scattered around (each a focused 1v1 battle); a dark rift portal at
+   the far edge leads to the dungeon boss. Campfire embers, fireflies and
+   a swirling portal give the world atmosphere. */
 const Overworld = (() => {
 
   const ENV = {
     sky: M3.hex('#152238'),
-    fog: M3.hex('#16261e'), fogNear: 9, fogFar: 21,
+    fog: M3.hex('#16261e'), fogNear: 12, fogFar: 30,
     lightDir: M3.normalize([], [-0.4, -0.75, 0.3]),
     lightCol: [0.82, 0.72, 0.58],
     ambient: [0.46, 0.52, 0.48],
   };
 
-  const REX_POS = [4.2, 0, 1.0];
-  const FIRE_POS = [5.5, 0, 2.1];
-  const SPAWN = [-5.2, 0, -4.2];
-  const BOUND = 8.7;
+  const SPAWN = [-6, 0, -6];
+  const FIRE_POS = [8.6, 0, 4.2];
+  const PORTAL_POS = [0, 0, 15.4];
+  const BOUND = 16.5;
 
-  let staticH = null;
-  const colliders = [
-    { x: REX_POS[0], z: REX_POS[2], r: 0.55 },
-    { x: FIRE_POS[0], z: FIRE_POS[2], r: 0.8 },
+  // trainer NPCs — one monster each. dlg keys live in BData.DIALOGUE.
+  const NPCS = [
+    { id: 'rex',   name: 'Camper REX', pos: [7, 0, 3.2],   model: 'rex_idle',  battleModel: 'rex_raised',
+      enemy: { species: 'MAGMULE', level: 14 } },
+    { id: 'hiker', name: 'Hiker DALE', pos: [-11, 0, 6],   model: 'npc_hiker', battleModel: 'npc_hiker',
+      enemy: { species: 'THORNLET', level: 12 } },
+    { id: 'lass',  name: 'Lass IVY',   pos: [12, 0, -8],   model: 'npc_lass',  battleModel: 'npc_lass',
+      enemy: { species: 'EMBERIK', level: 13 } },
+    { id: 'ace',   name: 'Ace KORU',   pos: [-8.5, 0, -12], model: 'npc_ace',  battleModel: 'npc_ace',
+      enemy: { species: 'MAGMULE', level: 16 } },
   ];
 
-  let hero = null, rexActor = null;
+  let staticH = null;
+  const colliders = [];
+
+  let hero = null;
   let camYaw = 0;
   let bobT = 0, stepT = 0, moving = false;
-  let dialogue = null; // {lines, idx, tw}
-  let battlePending = false;
+  let dialogue = null;       // {lines, idx, tw, onDone}
+  let pendingAction = null;  // fn run when dialogue closes
   let cardT = 0, hintT = 0, t = 0;
-  let fireflyT = 0, emberT = 0;
+  let fireflyT = 0, emberT = 0, swirlT = 0;
 
   function buildStatic() {
     if (staticH) return;
+    colliders.length = 0;
     const parts = [];
     const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
     const ground = Models.groundMesh({
-      radius: 14,
+      radius: 22,
       patches: [
-        { x: 4.9, z: 1.6, rx: 2.4, rz: 1.9, rot: 0.2 },   // camp clearing
-        { x: -4.6, z: -3.8, rx: 1.2, rz: 0.9, rot: 0.9 }, // spawn patch
+        { x: FIRE_POS[0], z: FIRE_POS[2], rx: 2.4, rz: 1.9, rot: 0.2 },
+        { x: SPAWN[0], z: SPAWN[2], rx: 1.4, rz: 1.1, rot: 0.9 },
+        { x: PORTAL_POS[0], z: PORTAL_POS[2], rx: 3.2, rz: 2.6, rot: 0 },
       ],
     });
     const r = M3.rng(7);
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + r() * 0.3;
-      push('tree' + (i % 3), [Math.cos(a) * 10, 0, Math.sin(a) * 10], r() * 6.3, 0.9 + r() * 0.4);
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2 + r() * 0.25;
+      push('tree' + (i % 3), [Math.cos(a) * 15, 0, Math.sin(a) * 15], r() * 6.3, 0.95 + r() * 0.45);
     }
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2 + 0.17 + r() * 0.25;
-      push('tree' + ((i + 2) % 3), [Math.cos(a) * 12.7, 0, Math.sin(a) * 12.7], r() * 6.3, 1.05 + r() * 0.5);
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2 + 0.13 + r() * 0.2;
+      push('tree' + ((i + 2) % 3), [Math.cos(a) * 19, 0, Math.sin(a) * 19], r() * 6.3, 1.1 + r() * 0.55);
     }
+    // a few inner trees for depth (kept clear of NPCs / paths)
+    const innerTrees = [[4, 0, -6], [-4, 0, 8], [10, 0, 9], [-13, 0, -3], [3, 0, 11]];
+    for (const p of innerTrees) push('tree' + (Math.floor(r() * 3)), p, r() * 6.3, 0.9 + r() * 0.4);
+
     const props = [
-      ['rock0', [6.3, 0, 0.4], 0.4, 1.1], ['rock1', [5.0, 0, 3.9], 1.9, 0.85],
-      ['rock1', [-6.2, 0, 2.8], 0.9, 1.2], ['rock0', [-1.5, 0, 6.4], 3.4, 0.9],
-      ['bush', [-3.2, 0, 3.8], 0.6, 1.05], ['bush', [2.4, 0, -4.8], 2.8, 0.95],
-      ['bush', [-6.0, 0, -1.6], 4.4, 1.1], ['bush', [0.8, 0, 5.9], 1.2, 0.9],
-      ['bush', [6.4, 0, -2.6], 5.3, 1.0],
-      ['campfire', FIRE_POS, 0.3, 1.1],
+      ['rock0', [9.5, 0, 0.4], 0.4, 1.2], ['rock1', [6.5, 0, 6.2], 1.9, 0.95],
+      ['rock1', [-9.5, 0, 3.5], 0.9, 1.3], ['rock0', [-2, 0, 9.5], 3.4, 1.0],
+      ['rock0', [13, 0, -3], 2.1, 1.1], ['rock1', [-12, 0, -8], 5.0, 1.2],
+      ['bush', [-5, 0, 5], 0.6, 1.1], ['bush', [4, 0, -9], 2.8, 1.0],
+      ['bush', [-9, 0, -2], 4.4, 1.1], ['bush', [2, 0, 9], 1.2, 0.95],
+      ['bush', [11, 0, -2], 5.3, 1.0], ['bush', [-3, 0, -8], 0.9, 1.05],
+      ['campfire', FIRE_POS, 0.3, 1.15],
     ];
     for (const [n, p, y, s] of props) {
       push(n, p, y, s);
-      if (n.indexOf('rock') === 0) colliders.push({ x: p[0], z: p[2], r: 0.85 * s });
-      if (n === 'bush') colliders.push({ x: p[0], z: p[2], r: 0.7 * s });
+      if (n.indexOf('rock') === 0) colliders.push({ x: p[0], z: p[2], r: 0.9 * s });
+      else if (n === 'bush') colliders.push({ x: p[0], z: p[2], r: 0.7 * s });
+      else if (n === 'campfire') colliders.push({ x: p[0], z: p[2], r: 0.8 });
     }
-    for (let i = 0; i < 70; i++) {
-      const a = r() * Math.PI * 2, rad = 1.5 + r() * 7;
+    // the rift portal at the far edge
+    push('portal', PORTAL_POS, Math.PI, 1.35);
+    colliders.push({ x: PORTAL_POS[0], z: PORTAL_POS[2], r: 1.1 });
+    // NPC colliders
+    for (const n of NPCS) colliders.push({ x: n.pos[0], z: n.pos[2], r: 0.55 });
+
+    for (let i = 0; i < 90; i++) {
+      const a = r() * Math.PI * 2, rad = 2 + r() * 12;
       const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
       if (Math.hypot(x - FIRE_POS[0], z - FIRE_POS[2]) < 1.6) continue;
       push('tuft', [x, 0, z], r() * 6.3, 0.8 + r() * 0.9);
@@ -3851,41 +4424,58 @@ const Overworld = (() => {
     buildStatic();
     Fx.clear();
     const m = Models.get('hero');
-    if (!hero) {
-      hero = { pos: SPAWN.slice(), yaw: Math.atan2(-SPAWN[0], -SPAWN[2]), h: Game.handle('hero'), height: m.height };
-    }
-    rexActor = { pos: REX_POS.slice(), yaw: Math.atan2(-REX_POS[0], -REX_POS[2]), h: Game.handle('rex_idle') };
-    if (params.result === 'win' || params.result === 'capture' || params.result === 'run') {
-      M3.set(hero.pos, 2.0, 0, 0.2);
-      hero.yaw = Math.atan2(REX_POS[0] - 2.0, REX_POS[2] - 0.2);
-    } else if (params.result === 'loss') {
-      M3.set(hero.pos, SPAWN[0], 0, SPAWN[2]);
-      hero.yaw = Math.atan2(-SPAWN[0], -SPAWN[2]);
-    }
+    if (!hero) hero = { pos: SPAWN.slice(), yaw: 0, h: Game.handle('hero'), height: m.height };
+    // NPC actors face the centre of the clearing
+    for (const n of NPCS) { n.h = Game.handle(n.model); n.yaw = Math.atan2(-n.pos[0], -n.pos[2]); }
+    if (params.result === 'loss') { M3.set(hero.pos, SPAWN[0], 0, SPAWN[2]); }
+    else if (params.fromDungeon) { M3.set(hero.pos, PORTAL_POS[0], 0, PORTAL_POS[2] - 3.2); }
+    else if (params.result) { M3.set(hero.pos, 1.5, 0, 0.5); }
+    hero.yaw = Math.atan2(-hero.pos[0], -hero.pos[2]);
     camYaw = hero.yaw;
     Cam.cut([hero.pos[0] - Math.sin(camYaw) * 4.4, 2.3, hero.pos[2] - Math.cos(camYaw) * 4.4],
             [hero.pos[0], 1.0, hero.pos[2]], 46);
     dialogue = null;
-    battlePending = false;
-    cardT = params.result ? 0 : 4.2;
-    hintT = params.result ? 0 : 9;
+    pendingAction = null;
+    cardT = params.result || params.fromDungeon ? 0 : 4.2;
+    hintT = params.result || params.fromDungeon ? 0 : 9;
     t = 0;
   }
 
-  function nearRex() {
-    return M3.dist(hero.pos, REX_POS) < 2.0;
+  // nearest interactable (npc or portal) within reach, or null
+  function nearest() {
+    let best = null, bestD = 2.2;
+    for (const n of NPCS) {
+      const d = M3.dist(hero.pos, n.pos);
+      if (d < bestD) { bestD = d; best = { kind: 'npc', npc: n }; }
+    }
+    const pd = M3.dist(hero.pos, PORTAL_POS);
+    if (pd < 2.8 && pd < bestD + 0.6) best = { kind: 'portal' };
+    return best;
   }
 
-  function startDialogue() {
-    const lines = Game.save.battles === 0 ? BData.DIALOGUE.first.slice()
-      : (Game.save.beaten ? BData.DIALOGUE.beaten.slice() : BData.DIALOGUE.rematch.slice());
-    dialogue = { lines, idx: 0, tw: UI.typewriter() };
+  function startDialogue(lines, onDone) {
+    dialogue = { lines: lines.slice(), idx: 0, tw: UI.typewriter(), onDone };
     dialogue.tw.set(lines[0]);
-    battlePending = true;
     Sfx.play('confirm');
-    // face each other
-    rexActor.yaw = Math.atan2(hero.pos[0] - REX_POS[0], hero.pos[2] - REX_POS[2]);
-    hero.yaw = Math.atan2(REX_POS[0] - hero.pos[0], REX_POS[2] - hero.pos[2]);
+  }
+
+  function interact(target) {
+    if (target.kind === 'portal') {
+      const lines = Game.save.bossBeaten ? BData.DIALOGUE.portalDone : BData.DIALOGUE.portal;
+      startDialogue(lines, () => Game.toDungeon());
+      return;
+    }
+    const n = target.npc;
+    n.yaw = Math.atan2(hero.pos[0] - n.pos[0], hero.pos[2] - n.pos[2]);
+    hero.yaw = Math.atan2(n.pos[0] - hero.pos[0], n.pos[2] - hero.pos[2]);
+    const dlg = BData.DIALOGUE[n.id] || {};
+    if (Game.save.npcs[n.id]) {
+      startDialogue(dlg.beaten || ['...'], null); // already beaten: just chat
+    } else {
+      startDialogue(dlg.intro || ['Let us battle!'], () =>
+        Game.toBattle({ arena: 'grove', npcId: n.id,
+          enemy: { species: n.enemy.species, level: n.enemy.level, trainer: n.name, npcId: n.id, trainerModel: n.battleModel } }));
+    }
   }
 
   function updateDialogue(dt) {
@@ -3897,8 +4487,9 @@ const Overworld = (() => {
         dialogue.tw.set(dialogue.lines[dialogue.idx]);
         Sfx.play('blip');
       } else {
+        const done = dialogue.onDone;
         dialogue = null;
-        if (battlePending) { battlePending = false; Game.toBattle(); }
+        if (done) done();
       }
     }
   }
@@ -3911,7 +4502,6 @@ const Overworld = (() => {
 
     if (dialogue) { updateDialogue(dt); moving = false; }
     else if (!Fx.transitioning()) {
-      // movement relative to the follow camera
       const ax = Input.axisX(), az = Input.axisY();
       moving = !!(ax || az);
       if (moving) {
@@ -3921,7 +4511,7 @@ const Overworld = (() => {
         M3.addScaled(mv, mv, fwd, -az);
         M3.addScaled(mv, mv, right, ax);
         M3.normalize(mv, mv);
-        const sp = 3.3 * dt;
+        const sp = 4.0 * dt;
         hero.pos[0] += mv[0] * sp;
         hero.pos[2] += mv[2] * sp;
         const targetYaw = Math.atan2(mv[0], mv[2]);
@@ -3937,44 +4527,39 @@ const Overworld = (() => {
         stepT -= dt;
         if (stepT <= 0) { Sfx.play('step'); stepT = 0.3; }
       }
-      // collision: arena boundary + props
       const d0 = Math.hypot(hero.pos[0], hero.pos[2]);
-      if (d0 > BOUND) {
-        hero.pos[0] *= BOUND / d0;
-        hero.pos[2] *= BOUND / d0;
-      }
+      if (d0 > BOUND) { hero.pos[0] *= BOUND / d0; hero.pos[2] *= BOUND / d0; }
       for (const c of colliders) {
         const dx = hero.pos[0] - c.x, dz = hero.pos[2] - c.z;
         const d = Math.hypot(dx, dz), min = c.r + 0.32;
-        if (d < min && d > 0.0001) {
-          hero.pos[0] = c.x + dx / d * min;
-          hero.pos[2] = c.z + dz / d * min;
-        }
+        if (d < min && d > 0.0001) { hero.pos[0] = c.x + dx / d * min; hero.pos[2] = c.z + dz / d * min; }
       }
-      if (nearRex() && Input.pressed('confirm')) startDialogue();
+      const near = nearest();
+      if (near && Input.pressed('confirm')) interact(near);
     }
 
-    // atmosphere
+    // atmosphere: fireflies, campfire embers, and a swirling portal
     fireflyT -= dt;
     if (fireflyT <= 0) {
       fireflyT = 0.5;
-      const a = Math.random() * Math.PI * 2, rad = 2 + Math.random() * 6;
-      Fx.spawn({
-        p: [Math.cos(a) * rad, 0.4 + Math.random() * 1.2, Math.sin(a) * rad],
-        c: [0.65, 1, 0.45],
-        v: [(Math.random() - 0.5) * 0.4, 0.12, (Math.random() - 0.5) * 0.4],
-        g: 0, drag: 0.2, life: 2.6 + Math.random() * 2, s: 0.035, s1: 0.01,
-      });
+      const a = Math.random() * Math.PI * 2, rad = 3 + Math.random() * 11;
+      Fx.spawn({ p: [Math.cos(a) * rad, 0.4 + Math.random() * 1.2, Math.sin(a) * rad], c: [0.65, 1, 0.45],
+                 v: [(Math.random() - 0.5) * 0.4, 0.12, (Math.random() - 0.5) * 0.4], g: 0, drag: 0.2, life: 2.6 + Math.random() * 2, s: 0.035, s1: 0.01 });
     }
     emberT -= dt;
     if (emberT <= 0) {
       emberT = 0.14;
-      Fx.spawn({
-        p: [FIRE_POS[0] + (Math.random() - 0.5) * 0.25, 0.25, FIRE_POS[2] + (Math.random() - 0.5) * 0.25],
-        c: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.95, 0.3, 0.1]][Math.floor(Math.random() * 3)],
-        v: [(Math.random() - 0.5) * 0.3, 0.9 + Math.random() * 0.7, (Math.random() - 0.5) * 0.3],
-        g: 0.4, drag: 0.4, life: 0.7 + Math.random() * 0.5, s: 0.06, s1: 0.01,
-      });
+      Fx.spawn({ p: [FIRE_POS[0] + (Math.random() - 0.5) * 0.25, 0.25, FIRE_POS[2] + (Math.random() - 0.5) * 0.25],
+                 c: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.95, 0.3, 0.1]][Math.floor(Math.random() * 3)],
+                 v: [(Math.random() - 0.5) * 0.3, 0.9 + Math.random() * 0.7, (Math.random() - 0.5) * 0.3], g: 0.4, drag: 0.4, life: 0.7 + Math.random() * 0.5, s: 0.06, s1: 0.01 });
+    }
+    swirlT -= dt;
+    if (swirlT <= 0) {
+      swirlT = 0.05;
+      const a = t * 3 + Math.random() * 0.5, rr = 0.6 + Math.random() * 1.2;
+      Fx.spawn({ p: [PORTAL_POS[0] + Math.cos(a) * rr, 1.6 + Math.sin(a * 1.7) * 1.1, PORTAL_POS[2]],
+                 c: [[0.7, 0.3, 1], [0.95, 0.4, 1], [1, 1, 1]][Math.floor(Math.random() * 3)],
+                 v: [-Math.cos(a) * 0.9, 0, 0.2], g: 0, drag: 0.4, life: 0.6, s: 0.04, s1: 0.01 });
     }
 
     Cam.follow(hero.pos, camYaw, { dist: 4.4, height: 2.3 }, dt);
@@ -3988,18 +4573,21 @@ const Overworld = (() => {
     Gfx.draw(staticH, null, {});
     const bob = moving ? Math.abs(Math.sin(bobT)) * 0.05 : 0;
     Gfx.draw(hero.h, M3.trs(mTmp, [hero.pos[0], hero.pos[1] + bob, hero.pos[2]], [hero.yaw, 0, 0], [1, 1, 1]), {});
-    const rexBob = 1 + 0.012 * Math.sin(t * 1.8);
-    Gfx.draw(rexActor.h, M3.trs(mTmp, rexActor.pos, [rexActor.yaw, 0, 0], [1, rexBob, 1]), {});
+    for (const n of NPCS) {
+      const nb = 1 + 0.012 * Math.sin(t * 1.8 + n.pos[0]);
+      Gfx.draw(n.h, M3.trs(mTmp, n.pos, [n.yaw, 0, 0], [1, nb, 1]), {});
+    }
     const pd = Fx.particleData();
     Gfx.drawDynamic(pd.data, pd.count);
   }
 
   function renderUi(ctx) {
     if (cardT > 0) UI.locationCard(ctx, 'WHISPER GROVE', M3.clamp(cardT, 0, 1));
-    if (hintT > 0)
-      UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound']);
-    if (dialogue) UI.msgBox(ctx, dialogue.tw, t, true);
-    else if (nearRex() && !Fx.transitioning()) UI.prompt(ctx, 'E  Talk');
+    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute   T: Stats']);
+    if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }
+    if (Fx.transitioning()) return;
+    const near = nearest();
+    if (near) UI.prompt(ctx, near.kind === 'portal' ? 'E  Enter the Rift' : 'E  Talk');
   }
 
   function exit() { Fx.clear(); }
@@ -4054,7 +4642,9 @@ const Game = (() => {
       { species: 'THORNLET', level: 9, hp: null },
       { species: 'EMBERIK', level: 9, hp: null },
     ],
-    beaten: false,
+    npcs: {},            // npcId -> true once that trainer is beaten
+    bossBeaten: false,
+    bossCaptured: false,
     battles: 0,
   };
 
@@ -4070,14 +4660,29 @@ const Game = (() => {
     scene.enter(params || {});
   }
 
-  function toBattle() {
+  function toBattle(opts) {
+    opts = opts || {};
     save.battles++;
-    Sfx.play('spawn');
-    Fx.transition('battleIn', () => switchNow('battle'), null);
+    const dungeon = opts.arena === 'dungeon';
+    Sfx.play(dungeon ? 'rift' : 'spawn');
+    Fx.transition(dungeon ? 'portalIn' : 'battleIn', () => switchNow('battle', opts), null);
   }
 
-  function toOverworld(result) {
-    Fx.transition('fade', () => switchNow('overworld', { result }), null);
+  function toDungeon() {
+    toBattle({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } });
+  }
+
+  function toOverworld(result, ctx) {
+    Fx.transition('fade', () => switchNow('overworld', Object.assign({ result }, ctx || {})), null);
+  }
+
+  // called by Battle.endBattle: record progress, then return to the overworld
+  function onBattleEnd(result, enemy) {
+    if (result === 'win' || result === 'capture') {
+      if (enemy && enemy.isBoss) { save.bossBeaten = true; if (result === 'capture') save.bossCaptured = true; }
+      else if (enemy && enemy.npcId) save.npcs[enemy.npcId] = true;
+    }
+    toOverworld(result, { fromDungeon: !!(enemy && enemy.isBoss) });
   }
 
   // ----------------------------------------------------- resolution
@@ -4300,13 +4905,14 @@ const Game = (() => {
     const hash = location.hash;
     if (hash.indexOf('viewer') >= 0) { scene = Viewer; scene.enter(); }
     else if (hash.indexOf('fly') >= 0) { scene = Battle; scene.enter({ fly: true }); }
+    else if (hash.indexOf('dungeon') >= 0) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
     else if (hash.indexOf('battle') >= 0) { scene = Battle; scene.enter({}); }
     else { scene = Overworld; scene.enter({}); }
 
     requestAnimationFrame((now) => { last = now; requestAnimationFrame(loop); });
   }
 
-  return { boot, save, handle, toBattle, toOverworld };
+  return { boot, save, handle, toBattle, toDungeon, toOverworld, onBattleEnd };
 })();
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

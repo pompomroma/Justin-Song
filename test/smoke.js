@@ -79,15 +79,18 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
 {
   const strings = [];
   for (const k in BData.MSG)
-    strings.push(BData.fmt(BData.MSG[k], { A: 'MAGMULE', M: 'Psyblast' }));
-  for (const k in BData.DIALOGUE) strings.push(...BData.DIALOGUE[k]);
+    strings.push(BData.fmt(BData.MSG[k], { A: 'MAGMULE', M: 'Psyblast', T: 'Camper REX', B: 'VORNETH-X', E: '135' }));
+  const collect = (v) => { if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object') Object.values(v).forEach(collect); else if (typeof v === 'string') strings.push(v); };
+  collect(BData.DIALOGUE);
   for (const k in BData.MOVES) strings.push(BData.MOVES[k].name);
-  strings.push('Lv.10', 'Lv.15', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
-               'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'E  Talk',
+  for (const k in BData.SPECIES) strings.push(BData.SPECIES[k].name);
+  strings.push('Lv.10', 'Lv.15', 'Lv.16', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
+               'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'M: Mute   T: Stats', 'E  Talk', 'E  Enter the Rift',
                'MODEL VIEWER  (Left/Right to cycle)', '0123456789',
                'FLY MODE: WASD move, IJKL look, R/F up/down, Shift fast', 'P: print camera pose',
                'Items', 'Capture', 'Run', 'Attack', 'Heal', 'Cure', 'Back', 'x3',
-               'C: Party', 'PARTY', 'FNT', 'IN BATTLE', 'Pick a healthy ally!', 'E: switch   X: back');
+               'C: Party', 'PARTY', 'FNT', 'IN BATTLE', 'Pick a healthy ally!', 'E: switch   X: back',
+               '60 FPS  7680x4320 8K');
   const missing = new Set();
   for (const s of strings)
     for (const ch of s)
@@ -119,12 +122,20 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
      BData.captureChance(0.5) > 0.25 && BData.captureChance(0.5) < 0.9, 'capture odds scale with damage');
   ok(BData.ITEMS.heal.uses === 3 && BData.ITEMS.cure.uses === 3, 'items carry 3 charges each');
 
-  const ANIM_KINDS = ['dash', 'rings', 'beam', 'orb', 'volley', 'cinder'];
+  const ANIM_KINDS = ['dash', 'rings', 'beam', 'orb', 'volley', 'cinder', 'voidbeam', 'voidnova'];
   let badAnim = null;
   for (const id in BData.MOVES)
-    if (ANIM_KINDS.indexOf(BData.MOVES[id].anim) < 0) badAnim = id;
+    if (BData.MOVES[id].effect !== 'transform' && ANIM_KINDS.indexOf(BData.MOVES[id].anim) < 0) badAnim = id;
   ok(!badAnim, 'every move has a known anim kind' + (badAnim ? ' (bad: ' + badAnim + ')' : ''));
   ok(BData.MOVES.CINDER.anim === 'cinder', 'Cinder uses its bespoke fire animation');
+
+  // boss: two forms, a transform move, tough capture, stronger awakened form
+  ok(BData.SPECIES.VORNETH.form2 === 'VORNETH_X' && !!BData.SPECIES.VORNETH_X, 'boss has two forms');
+  ok(BData.MOVES.AWAKEN.effect === 'transform', 'AWAKEN is a transform move');
+  ok(BData.MOVES.VORNETH ? false : (BData.MOVES.VOIDLANCE.anim === 'voidbeam'), 'boss move uses void animation');
+  ok(BData.captureChance(0.1, true) < BData.captureChance(0.1, false), 'boss is harder to capture');
+  const bs = BData.statsFor('VORNETH', 16), bx = BData.statsFor('VORNETH_X', 16);
+  ok(bx.atk > bs.atk && bx.spe > bs.spe, 'awakened form is stronger (atk/spe)');
 
   const mkRng = (seq) => { let i = 0; return () => (i < seq.length ? seq[i++] : seq[seq.length - 1]); };
 
@@ -150,8 +161,8 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   const rr = M3.rng(7);
   let growled = false;
   for (let i = 0; i < 300; i++) {
-    if (BData.aiPick({ atkStage: -6, foeHpFrac: 1, pp: { TACKLE: 9, CINDER: 9, GROWL: 9 } }, rr) === 'GROWL') growled = true;
-    if (BData.aiPick({ atkStage: 0, foeHpFrac: 0.1, pp: { TACKLE: 9, CINDER: 9, GROWL: 9 } }, rr) === 'GROWL') growled = true;
+    if (BData.aiPick(['TACKLE', 'CINDER', 'GROWL'], { atkStage: -6, foeHpFrac: 1, pp: { TACKLE: 9, CINDER: 9, GROWL: 9 } }, rr) === 'GROWL') growled = true;
+    if (BData.aiPick(['TACKLE', 'CINDER', 'GROWL'], { atkStage: 0, foeHpFrac: 0.1, pp: { TACKLE: 9, CINDER: 9, GROWL: 9 } }, rr) === 'GROWL') growled = true;
   }
   ok(!growled, 'AI growl gating');
 }
@@ -166,7 +177,7 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
     const epp = { TACKLE: 35, CINDER: 25, GROWL: 30 };
     for (let turn = 0; turn < 300 && php > 0 && ehp > 0; turn++) {
       const pMove = ppp.PSYBLAST > 0 ? 'PSYBLAST' : (ppp.MINDBEAM > 0 ? 'MINDBEAM' : 'TACKLE');
-      const eMove = BData.aiPick({ atkStage: eStage, foeHpFrac: php / ps.maxHp, pp: epp }, rng);
+      const eMove = BData.aiPick(['TACKLE', 'CINDER', 'GROWL'], { atkStage: eStage, foeHpFrac: php / ps.maxHp, pp: epp }, rng);
       const order = ps.spe > es.spe ? ['P', 'E'] : (ps.spe < es.spe ? ['E', 'P'] : (rng() < 0.5 ? ['P', 'E'] : ['E', 'P']));
       for (const s of order) {
         if (php <= 0 || ehp <= 0) break;
