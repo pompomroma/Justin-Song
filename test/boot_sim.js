@@ -161,6 +161,8 @@ function attackCycle(sb) {
   sb.__pump(200); // ride the transition back into the overworld
   ok(sb.__errors.length === 0, 'no errors through battle + return transition' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+  const allFull = vm.runInContext('__Game.save.party.every(m => m.hp === null)', sb);
+  ok(allFull, 'whole party is fully healed after the battle');
 }
 
 // ------------------------------------- run 2: overworld walk + handoff

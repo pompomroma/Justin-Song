@@ -2635,12 +2635,13 @@ const Battle = (() => {
     return {
       name, pos: pos.slice(), yaw, offset: [0, 0, 0], scl: [1, 1, 1],
       flashT: 0, shiverT: 0, trailT: 0, visible: true, phase: Math.random() * 6,
+      bobAmp: 0.012, bobRate: 2.1, // boss overrides these for a looming sway
       h: Game.handle(name), centers: m.centers, height: m.height,
     };
   }
   const mTmp = M3.mat(), mTmp2 = M3.mat();
   function actorMat(a, noBob) {
-    const bob = noBob ? 0 : 0.012 * Math.sin(t * 2.1 + a.phase);
+    const bob = noBob ? 0 : (a.bobAmp || 0.012) * Math.sin(t * (a.bobRate || 2.1) + a.phase);
     const shiver = a.shiverT > 0 ? Math.sin(t * 62) * 0.035 : 0;
     return M3.trs(mTmp,
       [a.pos[0] + a.offset[0] + shiver, a.pos[1] + a.offset[1], a.pos[2] + a.offset[2]],
@@ -3268,93 +3269,143 @@ const Battle = (() => {
     camDefault();
   }
 
-  /* VOID LANCE — boss-tier beam: a triple-layer lance (wide void glow +
-     mid + white core), heavy charge, sustained slow-mo + violet screen
-     flash, twin shockwaves. Grander than any other monster's beam. */
+  // dynamic low arc that swings around the cliff base while the boss acts
+  // (keeps the towering up-angle but adds motion to every boss attack)
+  function camBossSwing(s) {
+    const u = sideActor(s);
+    const up = u.pos[1] + u.height * 0.5;
+    Cam.play([
+      { t: 300, pos: [u.pos[0] - DIR_PM[0] * 3.2 + PERP[0] * 2.4, 0.7, u.pos[2] - DIR_PM[2] * 3.2 + PERP[2] * 2.4],
+        look: [u.pos[0], up, u.pos[2]], fov: 56, ease: 'outQuad' },
+      { t: 820, pos: [u.pos[0] - DIR_PM[0] * 2.6 - PERP[0] * 1.8, 0.5, u.pos[2] - DIR_PM[2] * 2.6 - PERP[2] * 1.8],
+        look: [u.pos[0], up * 0.92, u.pos[2]], fov: 53, ease: 'inOutCubic' },
+    ]);
+  }
+  const bossSwing = (s) => (arena === 'dungeon' && s === 'E');
+
+  /* VOID LANCE — boss-tier beam, intensified: ground-crack charge, a
+     FOUR-layer lance (halo + glow + mid + searing core), raking void
+     streaks, a 60-cube detonation with triple shockwaves, then a delayed
+     implosion that yanks shards back in for a second re-detonation. */
   function* kindVoidbeam(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
     const fx = move.fx, tint = flashTint(fx);
-    camSweep(s);
+    if (bossSwing(s)) camBossSwing(s); else camSweep(s);
     Sfx.play('charge'); Sfx.play('rift');
     const hp = head(u, 0.8);
-    for (let i = 0; i < 26; i++) {
-      const a = (i / 26) * Math.PI * 4;
-      Fx.spawn({ p: [hp[0] + Math.cos(a) * 0.7, hp[1] + (i % 5) * 0.12 - 0.25, hp[2] + Math.sin(a) * 0.7], c: fx[i % fx.length],
-                 v: [-Math.cos(a) * 2.1, 0, -Math.sin(a) * 2.1], life: 0.34, s: 0.055, s1: 0.012 });
-      if (i % 6 === 5) yield 54;
+    Fx.ring([u.pos[0], u.pos[1] + 0.05, u.pos[2]], { r0: 1.7, r1: 0.2, n: 18, life: 0.5, colors: [tint, fx[fx.length - 1]], s: 0.07 }); // crackle charge ring
+    for (let i = 0; i < 30; i++) {
+      const a = (i / 30) * Math.PI * 6;
+      Fx.spawn({ p: [hp[0] + Math.cos(a) * 0.85, hp[1] + (i % 6) * 0.12 - 0.32, hp[2] + Math.sin(a) * 0.85], c: fx[i % fx.length],
+                 v: [-Math.cos(a) * 2.3, 0.2, -Math.sin(a) * 2.3], life: 0.34, s: 0.058, s1: 0.012 });
+      if (i % 6 === 5) { Sfx.play('zap'); yield 50; }
     }
-    Fx.burst(hp, { n: 10, speed: 0.5, colors: [tint, [1, 1, 1]], life: 0.3, s: 0.07 });
-    tw3(u.scl, [1.1, 1.14, 1.1], 220, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
-    yield 220;
+    Fx.burst(hp, { n: 14, speed: 0.6, colors: [tint, [1, 1, 1]], life: 0.3, s: 0.08 });
+    Fx.addTrauma(0.25);
+    tw3(u.scl, [1.12, 1.18, 1.12], 220, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
+    yield 200;
     if (!res.miss) {
       Sfx.play('beam'); Sfx.play('zap');
       const tgt = chest(v);
-      Fx.beam(hp, tgt, 700, { rate: 7, colors: fx, jitter: 0.2, s: 0.12 });
-      Fx.beam(hp, tgt, 700, { rate: 8, colors: [fx[0], tint], jitter: 0.1, s: 0.08 });
-      Fx.beam(hp, tgt, 700, { rate: 9, colors: [[1, 1, 1]], jitter: 0.04, s: 0.05 });
-      Fx.addTrauma(0.4); Cam.kickFov(-6, 700);
-      for (let i = 0; i < 3; i++) { v.flashT = 0.2; Sfx.play('zap'); yield 150; }
+      Fx.beam(hp, tgt, 760, { rate: 6, colors: [tint, fx[fx.length - 1]], jitter: 0.32, s: 0.16 }); // halo
+      Fx.beam(hp, tgt, 760, { rate: 7, colors: fx, jitter: 0.2, s: 0.11 });
+      Fx.beam(hp, tgt, 760, { rate: 8, colors: [fx[0], tint], jitter: 0.1, s: 0.08 });
+      Fx.beam(hp, tgt, 760, { rate: 9, colors: [[1, 1, 1]], jitter: 0.04, s: 0.05 }); // searing core
+      Fx.addTrauma(0.5); Cam.kickFov(-7, 760);
+      for (let i = 0; i < 4; i++) {
+        v.flashT = 0.22; Sfx.play('zap');
+        Fx.spawn({ p: [tgt[0] + (Math.random() - 0.5) * 1.6, tgt[1] + (Math.random() - 0.5) * 1.6, tgt[2] + (Math.random() - 0.5) * 1.0], c: fx[i % fx.length], v: [0, 0, 0], life: 0.18, s: 0.06, s1: 0.01 });
+        yield 140;
+      }
       applyDamage(vs, res.dmg);
-      Sfx.play('boom');
-      Fx.hitstop(120); Fx.slowmo(420, 0.32);
-      Fx.flash(110, 0.95, tint); Fx.addTrauma(0.7); Cam.kickFov(9, 200);
-      v.flashT = 0.4;
-      Fx.burst(tgt, { n: 46, speed: 3.8, colors: fx, life: 0.66, g: -3 });
-      Fx.ring(tgt, { r0: 0.2, r1: 1.9, n: 22, life: 0.5, colors: [tint, fx[0]], s: 0.08 });
-      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 1.3, n: 16, life: 0.44, colors: [fx[fx.length - 1]], s: 0.06 });
+      Sfx.play('boom'); Sfx.play('quake');
+      Fx.hitstop(140); Fx.slowmo(480, 0.3);
+      Fx.flash(120, 1.0, tint); Fx.addTrauma(0.8); Cam.kickFov(10, 220);
+      v.flashT = 0.45;
+      Fx.burst(tgt, { n: 60, speed: 4.2, colors: fx, life: 0.7, g: -3 });
+      Fx.ring(tgt, { r0: 0.2, r1: 2.2, n: 26, life: 0.52, colors: [tint, fx[0]], s: 0.09 });
+      Fx.ring(tgt, { r0: 0.1, r1: 1.4, n: 16, life: 0.4, colors: [[1, 1, 1]], s: 0.06 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.06, v.pos[2]], { r0: 0.3, r1: 1.6, n: 18, life: 0.46, colors: [fx[fx.length - 1]], s: 0.06 });
       camImpact(other(s));
       const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d[0] * 0.5, 0, d[2] * 0.5], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 420, 'outBack'));
-      tw3(v.scl, [1.14, 0.84, 1.14], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 400, 'outBack'));
-      yield 420;
+      tw3(v.offset, [d[0] * 0.6, 0, d[2] * 0.6], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 440, 'outBack'));
+      tw3(v.scl, [1.16, 0.82, 1.16], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 420, 'outBack'));
+      yield 260;
+      // delayed implosion: shards rush back in, then a violet re-detonation
+      for (let i = 0; i < 16; i++) {
+        const a = Math.random() * Math.PI * 2, r = 1.5;
+        Fx.spawn({ p: [tgt[0] + Math.cos(a) * r, tgt[1] + (Math.random() - 0.5), tgt[2] + Math.sin(a) * r], c: fx[i % fx.length], v: [-Math.cos(a) * 4.5, 0, -Math.sin(a) * 4.5], life: 0.24, s: 0.06, s1: 0.02 });
+      }
+      yield 220;
+      Sfx.play('zap'); Fx.flash(70, 0.6, tint); Fx.addTrauma(0.4);
+      Fx.burst(tgt, { n: 24, speed: 3, colors: [tint, [1, 1, 1]], life: 0.55, g: -2 });
+      yield 300;
       yield drained(vs);
     } else { Sfx.play('beam'); Fx.beam(hp, [v.pos[0] + 1.4, v.pos[1] + 0.4, v.pos[2] + 1.2], 420, { rate: 6, colors: fx, jitter: 0.12, s: 0.08 }); yield 480; }
     tw3(u.scl, [1, 1, 1], 200, 'outQuad');
     camDefault();
   }
 
-  /* DREAD WAVE / ABYSS NOVA — boss-tier nova: a collapsing void orb hurled
-     to the target, an implosion, then a massive abyssal detonation with
-     deep slow-mo, violet flash and triple shockwaves. */
+  /* DREAD WAVE / ABYSS NOVA — boss-tier nova, intensified: a collapsing orb
+     hurled to the target bursts into an expanding abyssal dome sweeping
+     across the arena, a gravitational implosion that yanks debris inward,
+     then a COLOSSAL detonation (deep slow-mo, quake, triple shockwaves +
+     ground scorch) and lingering rift motes. */
   function* kindVoidnova(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
     const fx = move.fx, tint = flashTint(fx);
-    camSweep(s);
+    if (bossSwing(s)) camBossSwing(s); else camSweep(s);
     Sfx.play('charge'); Sfx.play('rift');
     const core = head(u, 0.7);
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2, r = 1.0 - i * 0.03;
-      Fx.spawn({ p: [core[0] + Math.cos(a) * r, core[1] + Math.sin(i * 1.7) * 0.3, core[2] + Math.sin(a) * r], c: fx[i % fx.length],
-                 v: [-Math.cos(a) * 2.2, 0, -Math.sin(a) * 2.2], life: 0.3, s: 0.06, s1: 0.015 });
-      if (i % 4 === 3) { Sfx.play('zap'); yield 52; }
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2, r = 1.2 - i * 0.035;
+      Fx.spawn({ p: [core[0] + Math.cos(a) * r, core[1] + Math.sin(i * 1.7) * 0.35, core[2] + Math.sin(a) * r], c: fx[i % fx.length],
+                 v: [-Math.cos(a) * 2.4, 0, -Math.sin(a) * 2.4], life: 0.3, s: 0.06, s1: 0.015 });
+      if (i % 4 === 3) { Sfx.play('zap'); yield 50; }
     }
-    tw3(u.scl, [1.12, 1.16, 1.12], 240, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
+    Fx.burst(core, { n: 12, speed: 0.5, colors: [tint, [1, 1, 1]], life: 0.3, s: 0.08 });
+    Fx.addTrauma(0.25);
+    tw3(u.scl, [1.14, 1.18, 1.14], 240, 'outQuad', () => tw3(u.scl, [1, 1, 1], 260, 'outBack'));
     yield 200;
     if (!res.miss) {
       const tgt = chest(v);
       Sfx.play('whoosh');
-      for (let i = 0; i < 12; i++)
+      for (let i = 0; i < 14; i++)
         Fx.spawn({ p: core.slice(), c: fx[i % fx.length],
-                   v: [(tgt[0] - core[0]) / 0.32, (tgt[1] - core[1]) / 0.32 + 0.4, (tgt[2] - core[2]) / 0.32], g: -3, life: 0.32, s: 0.09, s1: 0.05 });
-      yield 300;
+                   v: [(tgt[0] - core[0]) / 0.3, (tgt[1] - core[1]) / 0.3 + 0.4, (tgt[2] - core[2]) / 0.3], g: -3, life: 0.3, s: 0.1, s1: 0.05 });
+      yield 280;
       applyDamage(vs, res.dmg);
-      Sfx.play('boom'); Sfx.play('quake');
-      Fx.hitstop(140); Fx.slowmo(520, 0.3);
-      Fx.flash(120, 1.0, tint); Fx.addTrauma(0.85); Cam.kickFov(11, 220);
-      v.flashT = 0.45;
-      for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, r = 1.6;
-        Fx.spawn({ p: [v.pos[0] + Math.cos(a) * r, tgt[1] + (Math.random() - 0.5), v.pos[2] + Math.sin(a) * r], c: fx[i % fx.length],
-                   v: [-Math.cos(a) * 5, 0, -Math.sin(a) * 5], life: 0.22, s: 0.07, s1: 0.02 }); }
-      yield 200;
       Sfx.play('boom');
-      Fx.burst(tgt, { n: 56, speed: 4.4, colors: fx, life: 0.75, g: -3.4 });
-      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 2.4, n: 26, life: 0.55, colors: [tint, fx[0]], s: 0.09 });
-      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 1.9, n: 20, life: 0.5, colors: [fx[fx.length - 1], [0.3, 0.1, 0.5]], s: 0.07 });
+      Fx.flash(90, 0.7, tint); Fx.addTrauma(0.6); v.flashT = 0.4;
+      // expanding abyssal dome sweeping outward
+      for (let k = 0; k < 3; k++) {
+        Fx.ring([v.pos[0], v.pos[1] + 0.1 + k * 0.2, v.pos[2]], { r0: 0.2 + k * 0.3, r1: 1.4 + k * 0.9, n: 20, life: 0.5, colors: [tint, fx[0]], s: 0.08 });
+        yield 90;
+      }
+      // gravitational implosion: debris yanked inward
+      for (let i = 0; i < 22; i++) {
+        const a = Math.random() * Math.PI * 2, r = 2.0;
+        Fx.spawn({ p: [v.pos[0] + Math.cos(a) * r, tgt[1] + (Math.random() - 0.5) * 1.2, v.pos[2] + Math.sin(a) * r], c: fx[i % fx.length], v: [-Math.cos(a) * 6, 0, -Math.sin(a) * 6], life: 0.26, s: 0.07, s1: 0.02 });
+      }
+      Sfx.play('charge');
+      yield 240;
+      // colossal detonation
+      Sfx.play('boom'); Sfx.play('quake');
+      Fx.hitstop(160); Fx.slowmo(560, 0.28);
+      Fx.flash(140, 1.0, tint); Fx.addTrauma(0.95); Cam.kickFov(13, 240);
+      Fx.burst(tgt, { n: 64, speed: 4.8, colors: fx, life: 0.8, g: -3.2 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 2.8, n: 30, life: 0.6, colors: [tint, fx[0]], s: 0.1 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.4, v.pos[2]], { r0: 0.2, r1: 1.8, n: 18, life: 0.5, colors: [[1, 1, 1]], s: 0.07 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 2.0, n: 20, life: 0.52, colors: [fx[fx.length - 1], [0.3, 0.1, 0.5]], s: 0.07 });
       camImpact(other(s));
       const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d[0] * 0.7, 0, d[2] * 0.7], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 460, 'outBack'));
-      tw3(v.scl, [1.18, 0.8, 1.18], 160, 'outQuad', () => tw3(v.scl, [1, 1, 1], 430, 'outBack'));
-      yield 480;
+      tw3(v.offset, [d[0] * 0.8, 0, d[2] * 0.8], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 480, 'outBack'));
+      tw3(v.scl, [1.2, 0.78, 1.2], 160, 'outQuad', () => tw3(v.scl, [1, 1, 1], 440, 'outBack'));
+      yield 460;
+      for (let i = 0; i < 6; i++) { // lingering rift motes
+        Fx.spawn({ p: [v.pos[0] + (Math.random() - 0.5) * 1.0, v.pos[1] + 0.2, v.pos[2] + (Math.random() - 0.5) * 1.0], c: tint, v: [0, 0.8 + Math.random() * 0.5, 0], drag: 0.5, life: 0.7, s: 0.05, s1: 0.01 });
+        yield 60;
+      }
       yield drained(vs);
     } else { Fx.burst([v.pos[0] + 1.2, v.pos[1], v.pos[2] + 1.0], { n: 12, speed: 2.4, colors: fx, life: 0.5 }); yield 460; }
     camDefault();
@@ -3879,8 +3930,8 @@ const Battle = (() => {
   function endBattle(result) {
     state = 'DONE';
     mode = 'none';
-    for (let i = 0; i < pParty.length; i++)
-      Game.save.party[i].hp = result === 'loss' ? null : pParty[i].hp;
+    // fully heal the whole party (incl. any monster just captured) after every battle
+    for (let i = 0; i < Game.save.party.length; i++) Game.save.party[i].hp = null;
     Game.onBattleEnd(result, curEnemy);
   }
 
@@ -4014,6 +4065,7 @@ const Battle = (() => {
     const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
     enemy = actor(modelOf(eId), ePos, YAW_M);
+    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
     rex = actor(curEnemy.trainerModel || 'rex_raised', REX_POS, YAW_M + 0.15);
     items = { heal: BData.ITEMS.heal.uses, cure: BData.ITEMS.cure.uses };
     expFrac = 0.30; expTween = null;
@@ -4231,9 +4283,11 @@ const Battle = (() => {
       }
       riftT -= dt;
       if (riftT <= 0) {
-        riftT = 2.4 + Math.random() * 3;
-        Fx.flash(110, 0.22, [0.6, 0.3, 0.95]);
-        Fx.addTrauma(0.1);
+        // strike far more often while an action plays — "raid" intensity
+        const acting = state === 'TURN';
+        riftT = (acting ? 0.9 : 2.4) + Math.random() * (acting ? 1.0 : 3);
+        Fx.flash(110, acting ? 0.28 : 0.22, [0.6, 0.3, 0.95]);
+        Fx.addTrauma(acting ? 0.14 : 0.1);
         Fx.burst([BOSS_POS[0], BOSS_POS[1] + 1.5, BOSS_POS[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
       }
     }
