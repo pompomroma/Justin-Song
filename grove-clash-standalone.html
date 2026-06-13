@@ -2538,7 +2538,9 @@ const Battle = (() => {
   // Dungeon: the boss towers atop a cliff and the camera shoots from low,
   // tilted UP at it (Dynamax/Gigantamax-style framing) — dungeon-only.
   const BOSS_POS = [2.62, 3.38, 4.23];
-  const DUNGEON_SHOT = { pos: [-1.85, 0.65, -4.30], look: [2.62, 3.95, 4.23], fov: 50 };
+  // low + wide so the player's ally fills the lower-left foreground (as in
+  // NPC battles) while the camera still tilts UP at the cliff-top boss.
+  const DUNGEON_SHOT = { pos: [-3.40, 0.95, -3.20], look: [1.90, 2.90, 3.20], fov: 58 };
 
   const ENV = {
     sky: M3.hex('#0d1522'),
