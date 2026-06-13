@@ -2546,7 +2546,9 @@ const Battle = (() => {
      from the ground with overshoot, silhouette glints, touchdown ring. */
   function* spawnIn(a, theme) {
     const base = a.pos;
+    const tint = [(theme[1][0] + 1.4) / 2.4, (theme[1][1] + 1.4) / 2.4, (theme[1][2] + 1.4) / 2.4];
     Sfx.play('charge');
+    // descending beam-down column of light + converging spiral
     for (let i = 0; i < 20; i++) {
       const ang = i * 1.05, r = 1.25 - i * 0.035;
       const px = base[0] + Math.cos(ang) * r;
@@ -2557,19 +2559,26 @@ const Battle = (() => {
         v: [(base[0] - px) * 3.2, 0.4, (base[2] - pz) * 3.2],
         life: 0.3, s: 0.05, s1: 0.012,
       });
+      Fx.spawn({ // light pillar motes streaming down to the spawn point
+        p: [base[0] + (Math.random() - 0.5) * 0.4, 2.6 - i * 0.06, base[2] + (Math.random() - 0.5) * 0.4],
+        c: i % 2 ? [1, 1, 1] : theme[1],
+        v: [0, -3.4, 0], life: 0.34, s: 0.05, s1: 0.012,
+      });
       if (i % 5 === 4) yield 55;
     }
-    yield 90;
+    yield 80;
     a.visible = true;
     a.flashT = 0.55; // holds full white, then "develops" into color
     a.scl[0] = a.scl[1] = a.scl[2] = 0.02;
     tw3(a.scl, [1, 1, 1], 520, 'outBack');
     Sfx.play('spawn');
-    Cam.kickFov(-2.5, 320);
-    Fx.addTrauma(0.12);
+    Cam.kickFov(-3, 340);
+    Fx.flash(60, 0.55, tint);
+    Fx.slowmo(220, 0.5);
+    Fx.addTrauma(0.16);
     const m = M3.trs(M3.mat(), a.pos, [a.yaw, 0, 0], [1, 1, 1]);
     const cs = a.centers;
-    const step = Math.max(1, Math.floor(cs.length / 36));
+    const step = Math.max(1, Math.floor(cs.length / 40));
     const tmp = [0, 0, 0];
     for (let i = 0; i < cs.length; i += step) {
       M3.transformPoint(tmp, m, cs[i].p);
@@ -2580,16 +2589,16 @@ const Battle = (() => {
         g: -0.6, drag: 0.5, life: 0.5 + Math.random() * 0.25, s: 0.045, s1: 0.008,
       });
     }
-    yield 240;
-    Fx.ring([base[0], 0.06, base[2]], {
-      r0: 0.18, r1: 0.95, n: 16, life: 0.42,
-      colors: [[1, 1, 1], theme[1]], s: 0.05,
-    });
+    yield 230;
+    // stronger touchdown: twin rings + dust kick
+    Fx.ring([base[0], 0.06, base[2]], { r0: 0.18, r1: 1.1, n: 18, life: 0.44, colors: [[1, 1, 1], theme[1]], s: 0.055 });
+    Fx.ring([base[0], 0.04, base[2]], { r0: 0.1, r1: 0.7, n: 12, life: 0.34, colors: [tint], s: 0.045 });
     Fx.burst([base[0], 0.1, base[2]], {
-      n: 12, speed: 1.5, up: 1.1, g: -5, drag: 2,
+      n: 16, speed: 1.7, up: 1.2, g: -5, drag: 2,
       colors: [theme[1], [0.45, 0.4, 0.34], [0.6, 0.55, 0.45]], life: 0.45, s: 0.05,
     });
-    yield 330;
+    Fx.addTrauma(0.12);
+    yield 320;
   }
 
   // suck a creature back into light (recall / capture)
@@ -2613,37 +2622,47 @@ const Battle = (() => {
   // generic per-kind choreography; colors come from move.fx
   function* kindDash(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
-    const fx = move.fx;
+    const fx = move.fx, tint = flashTint(fx);
     camAtk(s);
-    yield 280;
+    yield 220;
     const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-    tw3(u.scl, [1.14, 0.84, 1.14], 150, 'outQuad');
-    tw3(u.offset, [-d[0] * 0.3, 0, -d[2] * 0.3], 170, 'outQuad');
-    yield 180;
+    // charge: aura motes spiral inward, deep anticipation crouch + pull-back
+    Sfx.play('charge');
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2, r = 0.85;
+      Fx.spawn({ p: [u.pos[0] + Math.cos(a) * r, 0.35 + Math.random() * 0.7, u.pos[2] + Math.sin(a) * r], c: fx[i % fx.length],
+                 v: [-Math.cos(a) * 1.7, 0.3, -Math.sin(a) * 1.7], life: 0.3, s: 0.05, s1: 0.01 });
+    }
+    tw3(u.scl, [1.2, 0.78, 1.2], 160, 'outQuad');
+    tw3(u.offset, [-d[0] * 0.38, 0, -d[2] * 0.38], 180, 'outQuad');
+    yield 190;
     Sfx.play('whoosh');
     const reach = M3.dist(u.pos, v.pos) - 1.0;
-    tw3(u.offset, [d[0] * reach, 0.05, d[2] * reach], 130, 'inQuad');
-    tw3(u.scl, [0.92, 1.1, 0.92], 130, 'outQuad');
-    u.trailT = 0.26;
-    yield 130;
+    tw3(u.offset, [d[0] * reach, 0.05, d[2] * reach], 115, 'inQuad');
+    tw3(u.scl, [0.88, 1.14, 0.88], 115, 'outQuad');
+    u.trailT = 0.32;
+    yield 115;
     if (!res.miss) {
       applyDamage(vs, res.dmg);
       Sfx.play('impact');
-      Fx.hitstop(90);
-      Fx.flash(70, 0.8);
-      Fx.addTrauma(0.55);
-      Cam.kickFov(6, 160);
-      v.flashT = 0.28;
-      Fx.ring(chest(v), { r0: 0.15, r1: 1.1, n: 14, life: 0.36, colors: fx, s: 0.06 });
-      Fx.burst(chest(v), { n: 14, speed: 2.6, colors: fx, life: 0.4 });
+      Fx.hitstop(100);
+      Fx.slowmo(260, 0.42);               // brief bullet-time on contact
+      Fx.flash(80, 0.85, tint);
+      Fx.addTrauma(0.62);
+      Cam.kickFov(7, 170);
+      v.flashT = 0.32;
       camImpact(other(s));
-      tw3(v.offset, [d[0] * 0.5, 0, d[2] * 0.5], 160, 'outQuad', () => tw3(v.offset, [0, 0, 0], 420, 'outBack'));
-      tw3(v.scl, [1.12, 0.86, 1.12], 140, 'outQuad', () => tw3(v.scl, [1, 1, 1], 380, 'outBack'));
+      // twin shock rings (air + ground) + spark burst
+      Fx.ring(chest(v), { r0: 0.15, r1: 1.25, n: 16, life: 0.38, colors: fx, s: 0.065 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.2, r1: 1.05, n: 12, life: 0.34, colors: [[0.6, 0.55, 0.45], fx[fx.length - 1]], s: 0.05 });
+      Fx.burst(chest(v), { n: 22, speed: 3.0, colors: fx, life: 0.45, g: -3 });
+      tw3(v.offset, [d[0] * 0.58, 0, d[2] * 0.58], 160, 'outQuad', () => tw3(v.offset, [0, 0, 0], 440, 'outBack'));
+      tw3(v.scl, [1.15, 0.83, 1.15], 140, 'outQuad', () => tw3(v.scl, [1, 1, 1], 400, 'outBack'));
     } else Sfx.play('whoosh');
-    yield 320;
+    yield 300;
     tw3(u.offset, [0, 0, 0], 300, 'outQuad');
     tw3(u.scl, [1, 1, 1], 240, 'outQuad');
-    yield 330;
+    yield 300;
     if (!res.miss) { yield drained(vs); }
     camDefault();
   }
@@ -2651,17 +2670,34 @@ const Battle = (() => {
   function* kindRings(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s));
     const fx = move.fx;
+    const VIO = [0.62, 0.42, 0.9], VIOD = [0.42, 0.3, 0.66];
     camGrowl(s);
-    yield 140;
-    Sfx.play('growl');
-    tw3(u.scl, [1.1, 1.06, 1.1], 220, 'outQuad', () => tw3(u.scl, [1, 1, 1], 300, 'outQuad'));
-    Fx.addTrauma(0.2);
-    for (let i = 0; i < 3; i++) {
-      Fx.ring(head(u, 0.6), { r0: 0.15, r1: 0.95, n: 12, life: 0.42,
-        colors: [fx[i % fx.length]], vy: 0.15, s: 0.05 });
-      yield 140;
+    yield 120;
+    // menacing swell + roar, with a violet intimidation pulse
+    Sfx.play('growl'); Sfx.play('roar');
+    tw3(u.scl, [1.18, 1.12, 1.18], 240, 'outQuad', () => tw3(u.scl, [1, 1, 1], 320, 'outBack'));
+    Fx.addTrauma(0.32);
+    Cam.kickFov(-3, 380);
+    Fx.flash(70, 0.32, [0.72, 0.52, 0.88]);
+    // concentric sound-wave shockwaves sweeping out from the head
+    for (let i = 0; i < 4; i++) {
+      Fx.ring(head(u, 0.6), { r0: 0.15, r1: 1.2, n: 16, life: 0.46,
+        colors: [fx[i % fx.length], VIO], vy: 0.12, s: 0.055 });
+      Sfx.play('zap');
+      yield 130;
     }
-    v.shiverT = 0.4;
+    // target buckles: hard shiver + a swirling debuff vortex closing on it
+    v.shiverT = 0.7;
+    v.flashT = 0.22;
+    Fx.addTrauma(0.22);
+    const cv = chest(v);
+    for (let i = 0; i < 16; i++) {
+      const a = i * 0.9, r = 1.15;
+      const px = v.pos[0] + Math.cos(a) * r, py = cv[1] + Math.sin(i * 1.3) * 0.3, pz = v.pos[2] + Math.sin(a) * r;
+      Fx.spawn({ p: [px, py, pz], c: i % 2 ? VIO : VIOD,
+                 v: [(cv[0] - px) * 2.6, (cv[1] - py) * 2.6 - 0.3, (cv[2] - pz) * 2.6],
+                 g: -1, life: 0.42, s: 0.05, s1: 0.012 });
+    }
     yield 420;
     camDefault();
     void res;
@@ -2669,85 +2705,111 @@ const Battle = (() => {
 
   function* kindBeam(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
-    const fx = move.fx;
+    const fx = move.fx, tint = flashTint(fx);
     camBeamSide();
     Sfx.play('charge');
     const hp = head(u, 0.8);
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      Fx.spawn({ p: [hp[0] + Math.cos(a) * 0.55, hp[1] + (i % 3) * 0.12 - 0.1, hp[2] + Math.sin(a) * 0.55],
+    // bigger converging charge: a double helix of energy spiraling inward
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 4;
+      Fx.spawn({ p: [hp[0] + Math.cos(a) * 0.62, hp[1] + (i % 4) * 0.12 - 0.18, hp[2] + Math.sin(a) * 0.62],
                  c: fx[i % fx.length],
-                 v: [-Math.cos(a) * 1.7, 0, -Math.sin(a) * 1.7], life: 0.32, s: 0.05, s1: 0.01 });
-      if (i % 4 === 3) yield 60;
+                 v: [-Math.cos(a) * 1.9, 0, -Math.sin(a) * 1.9], life: 0.32, s: 0.052, s1: 0.01 });
+      if (i % 5 === 4) yield 56;
     }
-    tw3(u.offset, [0, 0.16, 0], 300, 'outQuad');
-    yield 240;
+    tw3(u.offset, [0, 0.18, 0], 300, 'outQuad'); // levitate
+    Fx.burst(hp, { n: 8, speed: 0.5, colors: [fx[1] || fx[0], [1, 1, 1]], life: 0.3, s: 0.06 });
+    yield 220;
     if (!res.miss) {
       Sfx.play('beam');
-      Fx.beam(head(u, 0.8), chest(v), 560, { rate: 6, colors: fx, jitter: 0.09, s: 0.065 });
-      Fx.addTrauma(0.3);
-      Cam.kickFov(-4, 520);
-      for (let i = 0; i < 3; i++) { v.flashT = 0.16; Sfx.play('zap'); yield 170; }
+      // dual-layer beam: a thick outer glow + a bright fast core
+      Fx.beam(head(u, 0.8), chest(v), 620, { rate: 7, colors: fx, jitter: 0.16, s: 0.1 });
+      Fx.beam(head(u, 0.8), chest(v), 620, { rate: 8, colors: [[1, 1, 1], fx[0]], jitter: 0.05, s: 0.055 });
+      Fx.addTrauma(0.32);
+      Cam.kickFov(-5, 600);
+      for (let i = 0; i < 3; i++) { v.flashT = 0.18; Sfx.play('zap'); yield 165; }
       applyDamage(vs, res.dmg);
-      Fx.hitstop(70);
-      Fx.flash(60, 0.7);
-      Fx.addTrauma(0.4);
-      v.flashT = 0.3;
-      Fx.burst(chest(v), { n: 24, speed: 3, colors: fx, life: 0.5, g: -3 });
+      Sfx.play('boom');
+      Fx.hitstop(85);
+      Fx.slowmo(300, 0.4);
+      Fx.flash(75, 0.8, tint);
+      Fx.addTrauma(0.5);
+      v.flashT = 0.34;
+      Fx.burst(chest(v), { n: 32, speed: 3.2, colors: fx, life: 0.55, g: -3 });
+      Fx.ring(chest(v), { r0: 0.2, r1: 1.5, n: 18, life: 0.46, colors: [tint, fx[0]], s: 0.07 });
       camImpact(other(s));
       const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d[0] * 0.4, 0, d[2] * 0.4], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 380, 'outBack'));
+      tw3(v.offset, [d[0] * 0.45, 0, d[2] * 0.45], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 400, 'outBack'));
+      tw3(v.scl, [1.12, 0.86, 1.12], 140, 'outQuad', () => tw3(v.scl, [1, 1, 1], 380, 'outBack'));
       yield 420;
-    } else { Sfx.play('beam'); Fx.beam(head(u, 0.8), [v.pos[0] + 1.4, 0.4, v.pos[2] + 1.2], 400, { rate: 5, colors: fx, jitter: 0.1 }); yield 500; }
+    } else { Sfx.play('beam'); Fx.beam(head(u, 0.8), [v.pos[0] + 1.4, 0.4, v.pos[2] + 1.2], 420, { rate: 6, colors: fx, jitter: 0.1, s: 0.08 }); yield 500; }
     tw3(u.offset, [0, 0, 0], 260, 'outQuad');
-    yield 280;
+    yield 260;
     if (!res.miss) { yield drained(vs); }
     camDefault();
   }
 
   function* kindOrb(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
-    const fx = move.fx;
-    camAtk(s);
+    const fx = move.fx, tint = flashTint(fx);
+    camSweep(s);
     Sfx.play('charge');
     const orb = head(u, 1.05);
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2;
-      Fx.spawn({ p: [orb[0] + Math.cos(a) * 0.6, orb[1] + Math.sin(i * 2.1) * 0.25, orb[2] + Math.sin(a) * 0.6],
+    // charge: a contracting orb with orbiting satellite motes + a pulse
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2, r = 0.7 - i * 0.012;
+      Fx.spawn({ p: [orb[0] + Math.cos(a) * r, orb[1] + Math.sin(i * 2.1) * 0.28, orb[2] + Math.sin(a) * r],
                  c: fx[i % fx.length],
-                 v: [-Math.cos(a) * 1.9, 0, -Math.sin(a) * 1.9], life: 0.3, s: 0.06, s1: 0.015 });
-      if (i % 3 === 2) yield 55;
+                 v: [-Math.cos(a) * 2.0, 0, -Math.sin(a) * 2.0], life: 0.3, s: 0.06, s1: 0.015 });
+      if (i % 4 === 3) yield 50;
     }
-    tw3(u.scl, [1.08, 1.12, 1.08], 200, 'outQuad', () => tw3(u.scl, [1, 1, 1], 250, 'outQuad'));
+    tw3(u.scl, [1.1, 1.16, 1.1], 200, 'outQuad', () => tw3(u.scl, [1, 1, 1], 250, 'outBack'));
+    Fx.burst(orb, { n: 10, speed: 0.6, colors: [tint, [1, 1, 1]], life: 0.3, s: 0.07 });
+    Fx.addTrauma(0.18);
     yield 200;
     Sfx.play('whoosh');
     const tgt = chest(v);
     if (!res.miss) {
-      for (let i = 0; i < 10; i++)
-        Fx.spawn({ p: [orb[0] + (Math.random() - 0.5) * 0.2, orb[1] + (Math.random() - 0.5) * 0.2, orb[2] + (Math.random() - 0.5) * 0.2],
+      // lobbed comet cluster with a streaming trail
+      for (let i = 0; i < 14; i++)
+        Fx.spawn({ p: [orb[0] + (Math.random() - 0.5) * 0.25, orb[1] + (Math.random() - 0.5) * 0.25, orb[2] + (Math.random() - 0.5) * 0.25],
                    c: fx[i % fx.length],
-                   v: [(tgt[0] - orb[0]) / 0.3, (tgt[1] - orb[1]) / 0.3 + 0.45, (tgt[2] - orb[2]) / 0.3],
-                   g: -3, life: 0.3, s: 0.075, s1: 0.05 });
+                   v: [(tgt[0] - orb[0]) / 0.3, (tgt[1] - orb[1]) / 0.3 + 0.5, (tgt[2] - orb[2]) / 0.3],
+                   g: -3, life: 0.32, s: 0.08, s1: 0.05 });
       yield 290;
       applyDamage(vs, res.dmg);
-      Sfx.play('boom');
-      Fx.hitstop(120);
-      Fx.flash(90, 1.0);
-      Fx.addTrauma(0.7);
-      Cam.kickFov(8, 180);
-      v.flashT = 0.35;
-      Fx.burst(tgt, { n: 40, speed: 3.6, colors: fx, life: 0.65, g: -3.5 });
-      Fx.ring(v.pos.map((x, i2) => i2 === 1 ? x + 0.1 : x), { r0: 0.3, r1: 1.7, n: 18, life: 0.5, colors: [fx[0]], s: 0.07 });
-      Cam.cut([-4.2, 1.8, -3.4], [0.4, 0.5, 0.5], 46);
+      Sfx.play('boom'); Sfx.play('impact');
+      Fx.hitstop(130);
+      Fx.slowmo(460, 0.3);                  // grand bullet-time bloom
+      Fx.flash(110, 1.0, tint);
+      Fx.addTrauma(0.82);
+      Cam.kickFov(10, 200);
+      v.flashT = 0.42;
+      camImpact(other(s));
+      Fx.burst(tgt, { n: 52, speed: 4.0, colors: fx, life: 0.7, g: -3.5 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 2.0, n: 22, life: 0.5, colors: [tint], s: 0.08 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.25, r1: 1.5, n: 16, life: 0.45, colors: [fx[fx.length - 1]], s: 0.06 });
       const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d[0] * 0.7, 0, d[2] * 0.7], 180, 'outQuad', () => tw3(v.offset, [0, 0, 0], 460, 'outBack'));
-      tw3(v.scl, [1.16, 0.8, 1.16], 160, 'outQuad', () => tw3(v.scl, [1, 1, 1], 420, 'outBack'));
-      yield 520;
+      tw3(v.offset, [d[0] * 0.75, 0, d[2] * 0.75], 180, 'outQuad', () => tw3(v.offset, [0, 0, 0], 470, 'outBack'));
+      tw3(v.scl, [1.18, 0.78, 1.18], 160, 'outQuad', () => tw3(v.scl, [1, 1, 1], 430, 'outBack'));
+      yield 300;
+      // secondary implosion: motes rush back in, then a bright re-burst
+      for (let i = 0; i < 14; i++) {
+        const a = Math.random() * Math.PI * 2, r = 1.2;
+        Fx.spawn({ p: [v.pos[0] + Math.cos(a) * r, tgt[1] + (Math.random() - 0.5), v.pos[2] + Math.sin(a) * r], c: fx[i % fx.length],
+                   v: [-Math.cos(a) * 4, 0, -Math.sin(a) * 4], life: 0.26, s: 0.06, s1: 0.02 });
+      }
+      yield 240;
+      Sfx.play('zap');
+      Fx.flash(60, 0.6, tint);
+      Fx.burst(tgt, { n: 20, speed: 2.6, colors: [tint, [1, 1, 1]], life: 0.5, g: -2 });
+      Fx.addTrauma(0.35);
+      yield 280;
       yield drained(vs);
     } else {
-      for (let i = 0; i < 10; i++)
+      for (let i = 0; i < 12; i++)
         Fx.spawn({ p: orb.slice(), c: fx[0],
-                   v: [(tgt[0] - orb[0]) / 0.3 + 1.5, 1.2, (tgt[2] - orb[2]) / 0.3], g: -4, life: 0.5, s: 0.07 });
+                   v: [(tgt[0] - orb[0]) / 0.3 + 1.6, 1.3, (tgt[2] - orb[2]) / 0.3], g: -4, life: 0.5, s: 0.07 });
       yield 500;
     }
     camDefault();
@@ -2755,49 +2817,57 @@ const Battle = (() => {
 
   function* kindVolley(s, res, move) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
-    const fx = move.fx;
-    camAtk(s);
-    yield 220;
-    Sfx.play('sizzle');
+    const fx = move.fx, tint = flashTint(fx);
+    camSweep(s);
+    Sfx.play('charge');
     const mouth = head(u, 0.85);
     const tgt = chest(v);
-    for (let i = 0; i < 12; i++) {
-      const ft = 0.42;
-      const spread = [(Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.5];
+    // gather a charge orb, then loose a rapid arcing barrage
+    Fx.burst(mouth, { n: 8, speed: 0.5, colors: [tint, fx[0]], life: 0.3, s: 0.06 });
+    tw3(u.scl, [1.12, 0.92, 1.12], 180, 'outQuad', () => tw3(u.scl, [1, 1, 1], 320, 'outBack'));
+    yield 200;
+    Sfx.play('sizzle');
+    for (let i = 0; i < 16; i++) {
+      const ft = 0.4;
+      const spread = [(Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.35, (Math.random() - 0.5) * 0.6];
       Fx.spawn({ p: mouth.slice(),
                  c: fx[i % fx.length],
-                 v: [(tgt[0] + spread[0] - mouth[0]) / ft, (tgt[1] - mouth[1]) / ft + 0.5 * 6 * ft / 2, (tgt[2] + spread[2] - mouth[2]) / ft],
-                 g: -6, life: ft + 0.06, s: 0.085, s1: 0.05 });
+                 v: [(tgt[0] + spread[0] - mouth[0]) / ft, (tgt[1] - mouth[1]) / ft + 1.5, (tgt[2] + spread[2] - mouth[2]) / ft],
+                 g: -6, life: ft + 0.06, s: 0.085, s1: 0.045 });
       if (i % 2) Sfx.play('thud');
       if (i > 3 && !res.miss) {
-        Fx.burst([tgt[0] + (Math.random() - 0.5) * 0.5, tgt[1], tgt[2] + (Math.random() - 0.5) * 0.5],
-                 { n: 3, speed: 1.4, colors: [fx[0], [0.5, 0.45, 0.42]], life: 0.4, up: 1.2 });
-        Fx.addTrauma(0.1);
-        v.flashT = Math.max(v.flashT, 0.1);
+        Fx.burst([tgt[0] + (Math.random() - 0.5) * 0.6, tgt[1], tgt[2] + (Math.random() - 0.5) * 0.6],
+                 { n: 4, speed: 1.6, colors: [fx[0], [0.5, 0.45, 0.42]], life: 0.42, up: 1.3 });
+        Fx.addTrauma(0.11);
+        v.flashT = Math.max(v.flashT, 0.12);
       }
-      yield 60;
+      yield 52;
     }
-    yield 240;
+    yield 200;
     if (!res.miss) {
       applyDamage(vs, res.dmg);
-      Sfx.play('impact');
-      Fx.hitstop(60);
-      Fx.flash(50, 0.5);
-      Fx.addTrauma(0.4);
-      v.flashT = 0.25;
-      Fx.burst(tgt, { n: 18, speed: 2.6, colors: fx, life: 0.5 });
+      Sfx.play('boom'); Sfx.play('impact');
+      Fx.hitstop(85);
+      Fx.slowmo(280, 0.4);
+      Fx.flash(70, 0.7, tint);
+      Fx.addTrauma(0.5);
+      v.flashT = 0.3;
+      Fx.burst(tgt, { n: 30, speed: 3.0, colors: fx, life: 0.55, g: -3 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.2, r1: 1.5, n: 18, life: 0.46, colors: [tint, fx[fx.length - 1]], s: 0.07 });
       camImpact(other(s));
       const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d[0] * 0.4, 0, d[2] * 0.4], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 380, 'outBack'));
+      tw3(v.offset, [d[0] * 0.5, 0, d[2] * 0.5], 150, 'outQuad', () => tw3(v.offset, [0, 0, 0], 400, 'outBack'));
+      tw3(v.scl, [1.13, 0.85, 1.13], 140, 'outQuad', () => tw3(v.scl, [1, 1, 1], 380, 'outBack'));
       yield 380;
       yield drained(vs);
     } else yield 300;
     camDefault();
   }
 
-  // dynamic camera that sweeps along the fire path: behind the attacker,
-  // arcing out to a side profile, then settling on the impact 3/4 view
-  function camCinder(s) {
+  // dynamic camera that sweeps along the attack path: behind the attacker,
+  // arcing out to a side profile, then settling on the impact 3/4 view.
+  // Used by Cinder and the heavy orb moves for cinematic motion.
+  function camSweep(s) {
     const u = sideActor(s), v = sideActor(other(s));
     const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
     const side = s === 'P' ? -1 : 1;
@@ -2812,6 +2882,12 @@ const Battle = (() => {
     ]);
   }
 
+  // bright element-tinted color for full-screen impact flashes (toward white)
+  function flashTint(fx) {
+    const c = fx[fx.length - 1] || [1, 1, 1];
+    return [(c[0] + 1.4) / 2.4, (c[1] + 1.4) / 2.4, (c[2] + 1.4) / 2.4];
+  }
+
   /* CINDER — bespoke flashy fire choreography: a helix ember vortex
      inhaled to the mouth, a sustained roaring fire-jet cone with heat
      shimmer and licking flames (camera sweeping along the blast), then a
@@ -2822,7 +2898,7 @@ const Battle = (() => {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
     const W = [1, 1, 1], YEL = [1, 0.85, 0.3], ORG = [1, 0.55, 0.18], RED = [0.95, 0.3, 0.08], SMK = [0.4, 0.38, 0.36];
     const fire = [W, YEL, ORG, RED];
-    camCinder(s);
+    camSweep(s);
     const mouth = head(u, 0.85);
     const tgt = chest(v);
     const d = [0, 0, 0]; M3.sub(d, tgt, mouth); M3.normalize(d, d);
@@ -2967,16 +3043,26 @@ const Battle = (() => {
 
   function* faintSeq(s) {
     const a = sideActor(s), st = sideState(s);
-    Sfx.play('faint');
-    Fx.flash(70, 0.8);
-    yield 110;
-    Fx.flash(70, 0.8);
     camFaint(s);
-    yield 130;
+    Sfx.play('faint');
+    // buckle in slow-motion with a double white flash
+    Fx.slowmo(700, 0.45);
+    Fx.flash(90, 0.9);
+    a.flashT = 0.5;
+    tw3(a.scl, [1.1, 0.68, 1.1], 240, 'outQuad'); // legs give out
+    Fx.addTrauma(0.26);
+    yield 200;
+    Fx.flash(80, 0.95);
+    yield 150;
     a.visible = false;
-    Fx.dissolve(a.centers, actorMat(a, true), { life: 0.95 });
-    Fx.addTrauma(0.2);
-    yield 1000;
+    // scatter into a swirling cloud of voxels; a soul wisp rises and fades
+    Fx.dissolve(a.centers, actorMat(a, true), { life: 1.0 });
+    for (let i = 0; i < 10; i++)
+      Fx.spawn({ p: [a.pos[0] + (Math.random() - 0.5) * 0.3, 0.3 + i * 0.06, a.pos[2] + (Math.random() - 0.5) * 0.3],
+                 c: i % 2 ? [0.85, 0.9, 1] : [1, 1, 1], v: [0, 1.2 + Math.random() * 0.5, 0], drag: 0.4, life: 0.95, s: 0.045, s1: 0.005 });
+    Fx.ring([a.pos[0], 0.05, a.pos[2]], { r0: 0.75, r1: 0.1, n: 14, life: 0.5, colors: [[0.7, 0.7, 0.8], [1, 1, 1]], s: 0.05 }); // imploding ground ring
+    Fx.addTrauma(0.22);
+    yield 1050;
     yield* say(BData.fmt(BData.MSG.faint, { A: st.name }));
   }
 
@@ -3016,12 +3102,15 @@ const Battle = (() => {
   function* switchSeq(to, recall) {
     if (recall) {
       yield* say(BData.fmt(BData.MSG.comeBack, { A: pState.name }), { auto: true, hold: 150 });
+      const th = themeOf(pState.id);
       camSelf();
       Sfx.play('charge');
-      recallFx(player, chest(player), themeOf(pState.id));
+      Fx.flash(50, 0.4, [(th[1][0] + 1.4) / 2.4, (th[1][1] + 1.4) / 2.4, (th[1][2] + 1.4) / 2.4]);
+      Fx.ring(chest(player), { r0: 1.0, r1: 0.1, n: 14, life: 0.3, colors: [th[1], [1, 1, 1]], s: 0.05 });
+      recallFx(player, chest(player), th);
       tw3(player.scl, [0.02, 0.02, 0.02], 260, 'inQuad');
-      player.flashT = 0.4;
-      Fx.ring([player.pos[0], 0.08, player.pos[2]], { r0: 0.8, r1: 0.1, n: 12, life: 0.3, colors: [themeOf(pState.id)[1], [1, 1, 1]], s: 0.045 });
+      player.flashT = 0.45;
+      Fx.ring([player.pos[0], 0.08, player.pos[2]], { r0: 0.8, r1: 0.1, n: 12, life: 0.3, colors: [th[1], [1, 1, 1]], s: 0.045 });
       yield 290;
       player.visible = false;
       yield 180;
@@ -3053,43 +3142,60 @@ const Battle = (() => {
     if (which === 'heal') {
       camSelf();
       Sfx.play('heal');
-      // golden-green restorative rain + rising motes
-      for (let i = 0; i < 22; i++) {
-        const a = rngLocal() * Math.PI * 2, r = 0.25 + rngLocal() * 0.55;
+      // descending pillar of restorative light + ground-up rising motes
+      for (let i = 0; i < 24; i++) {
+        const a = rngLocal() * Math.PI * 2, r = 0.25 + rngLocal() * 0.6;
         Fx.spawn({
-          p: [player.pos[0] + Math.cos(a) * r, 1.5 + rngLocal() * 0.5, player.pos[2] + Math.sin(a) * r],
+          p: [player.pos[0] + Math.cos(a) * r, 2.3 - i * 0.02, player.pos[2] + Math.sin(a) * r],
           c: [[0.55, 0.95, 0.45], [1, 0.92, 0.5], [1, 1, 1]][i % 3],
-          v: [0, -1.6 - rngLocal(), 0], drag: 0.4, life: 0.7, s: 0.05, s1: 0.015,
+          v: [0, -2.1 - rngLocal(), 0], drag: 0.4, life: 0.7, s: 0.05, s1: 0.015,
         });
         Fx.spawn({
           p: [player.pos[0] + Math.cos(a) * 0.5, 0.1, player.pos[2] + Math.sin(a) * 0.5],
-          c: [0.7, 1, 0.6], v: [0, 0.8 + rngLocal() * 0.6, 0], life: 0.8, s: 0.035, s1: 0.01,
+          c: [0.7, 1, 0.6], v: [0, 0.9 + rngLocal() * 0.7, 0], life: 0.8, s: 0.035, s1: 0.01,
         });
-        if (i % 6 === 5) yield 90;
+        if (i % 6 === 5) yield 82;
       }
-      player.flashT = 0.25;
-      Fx.flash(45, 0.3);
+      // sparkle glints dance up the creature's silhouette
+      const m = M3.trs(M3.mat(), player.pos, [player.yaw, 0, 0], [1, 1, 1]);
+      const cs = player.centers, step = Math.max(1, Math.floor(cs.length / 28)), tmp = [0, 0, 0];
+      for (let i = 0; i < cs.length; i += step) {
+        M3.transformPoint(tmp, m, cs[i].p);
+        Fx.spawn({ p: [tmp[0], tmp[1], tmp[2]], c: (i / step | 0) % 2 ? [0.6, 1, 0.5] : [1, 1, 0.7],
+                   v: [0, 0.6 + Math.random() * 0.5, 0], drag: 0.5, life: 0.5, s: 0.04, s1: 0.006 });
+      }
+      player.flashT = 0.35;
+      Fx.flash(70, 0.45, [0.7, 1, 0.6]);  // green-gold heal flash
+      Fx.slowmo(240, 0.6);
       applyHeal(pState, Math.floor(pState.stats.maxHp * def.healFrac));
-      Fx.ring([player.pos[0], 0.08, player.pos[2]], { r0: 0.15, r1: 1.0, n: 16, life: 0.5, colors: [[1, 0.92, 0.5], [0.55, 0.95, 0.45]], s: 0.05 });
+      Fx.ring([player.pos[0], 0.08, player.pos[2]], { r0: 0.15, r1: 1.1, n: 18, life: 0.5, colors: [[1, 0.92, 0.5], [0.55, 0.95, 0.45]], s: 0.055 });
       Sfx.play('spawn');
+      tw3(player.scl, [1.08, 1.08, 1.08], 200, 'outQuad', () => tw3(player.scl, [1, 1, 1], 300, 'outBack'));
       yield 400;
       yield drained(pState);
       yield* say(BData.fmt(BData.MSG.healUsed, { A: pState.name }), { auto: true });
     } else {
       camOrbitSelf();
       Sfx.play('cure');
-      // purge: violet wisps ejected, cleansing white-blue rings
-      Fx.burst(chest(player), { n: 16, speed: 2.2, colors: [[0.6, 0.4, 0.9], [0.45, 0.3, 0.7]], life: 0.55, g: 1.5, drag: 0.5 });
-      yield 220;
-      for (let i = 0; i < 2; i++) {
-        Fx.ring(chest(player), { r0: 0.1, r1: 1.2, n: 16, life: 0.45, colors: [[1, 1, 1], [0.6, 0.85, 1]], vy: 0.3, s: 0.05 });
+      const cv = chest(player);
+      // shatter the debuffs: violet shards burst outward and dissipate
+      Fx.burst(cv, { n: 20, speed: 2.6, colors: [[0.6, 0.4, 0.9], [0.45, 0.3, 0.7]], life: 0.55, g: 1.2, drag: 0.6 });
+      Sfx.play('zap');
+      yield 200;
+      // a cleansing dome of cyan-white rings sweeps over the body
+      for (let i = 0; i < 3; i++) {
+        Fx.ring(cv, { r0: 0.1, r1: 1.3, n: 18, life: 0.46, colors: [[1, 1, 1], [0.6, 0.85, 1]], vy: 0.28, s: 0.05 });
         Sfx.play('zap');
-        player.flashT = 0.18;
-        yield 240;
+        player.flashT = 0.2;
+        yield 200;
       }
+      // radiant restore burst + cyan flash as stats normalize
       pState.atkStage = Math.max(0, pState.atkStage);
-      Fx.flash(40, 0.35);
-      Cam.kickFov(-3, 250);
+      Fx.flash(60, 0.5, [0.7, 0.92, 1]);
+      Fx.slowmo(220, 0.6);
+      Fx.burst(cv, { n: 20, speed: 2.4, colors: [[1, 1, 1], [0.7, 0.95, 1]], life: 0.5, up: 0.6, g: -1.5 });
+      Cam.kickFov(-4, 300);
+      Fx.addTrauma(0.18);
       yield 350;
       yield* say(BData.fmt(BData.MSG.cureUsed, { A: pState.name }), { auto: true });
     }
@@ -3111,10 +3217,12 @@ const Battle = (() => {
     camThrow();
     yield () => !ball.flight;
     ball.trail = false;
-    // suck the creature into the ball
+    // suck the creature into the ball as a swirling red-white vortex
     Sfx.play('zap');
-    Fx.flash(70, 0.85);
-    Cam.kickFov(-3, 250);
+    Fx.flash(80, 0.9, [1, 0.6, 0.5]);
+    Fx.slowmo(260, 0.5);
+    Cam.kickFov(-4, 280);
+    Fx.ring(chest(enemy), { r0: 1.1, r1: 0.1, n: 16, life: 0.32, colors: [[1, 0.4, 0.4], [1, 1, 1]], s: 0.05 });
     recallFx(enemy, ball.pos, [[1, 0.4, 0.4], [1, 1, 1]]);
     tw3(enemy.scl, [0.02, 0.02, 0.02], 240, 'inQuad');
     enemy.flashT = 0.45;
@@ -3141,10 +3249,19 @@ const Battle = (() => {
     }
     if (success) {
       Sfx.play('confirm');
-      Fx.flash(50, 0.4);
-      Fx.burst([ball.pos[0], ball.pos[1] + 0.25, ball.pos[2]],
-               { n: 18, speed: 1.8, up: 1.4, g: -2.5, colors: [[1, 0.92, 0.5], [1, 1, 1], [0.7, 0.9, 1]], life: 0.7, s: 0.05 });
-      Fx.ring([ball.pos[0], ball.pos[1] + 0.1, ball.pos[2]], { r0: 0.1, r1: 0.8, n: 14, life: 0.45, colors: [[1, 0.92, 0.5]], s: 0.045 });
+      Fx.slowmo(420, 0.4);                  // bullet-time celebration
+      Fx.flash(90, 0.7, [1, 0.9, 0.5]);
+      Cam.kickFov(-5, 360);
+      const bp = [ball.pos[0], ball.pos[1] + 0.2, ball.pos[2]];
+      Fx.burst(bp, { n: 30, speed: 2.4, up: 1.6, g: -2.2, colors: [[1, 0.92, 0.5], [1, 1, 1], [0.7, 0.9, 1]], life: 0.8, s: 0.055 });
+      Fx.ring([ball.pos[0], ball.pos[1] + 0.1, ball.pos[2]], { r0: 0.1, r1: 0.9, n: 16, life: 0.48, colors: [[1, 0.92, 0.5]], s: 0.05 });
+      Fx.ring([ball.pos[0], 0.05, ball.pos[2]], { r0: 0.15, r1: 1.1, n: 14, life: 0.5, colors: [[1, 1, 1], [1, 0.92, 0.5]], s: 0.045 });
+      // radiant celebratory light beams shoot upward
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        Fx.spawn({ p: [ball.pos[0] + Math.cos(a) * 0.15, ball.pos[1], ball.pos[2] + Math.sin(a) * 0.15],
+                   c: i % 2 ? [1, 0.92, 0.5] : [1, 1, 1], v: [Math.cos(a) * 0.5, 3.6, Math.sin(a) * 0.5], drag: 0.2, life: 0.7, s: 0.05, s1: 0.01 });
+      }
       Sfx.play('victory');
       yield 700;
       yield* say(BData.fmt(BData.MSG.caught, { A: eState.name }));
@@ -3154,16 +3271,17 @@ const Battle = (() => {
       endBattle('capture');
       return true;
     }
-    // broke free
-    Sfx.play('impact');
-    Fx.flash(80, 0.9);
-    Fx.burst(ball.pos, { n: 22, speed: 2.6, colors: [[1, 1, 1], [1, 0.4, 0.4], [1, 0.85, 0.45]], life: 0.5 });
+    // broke free — violent red burst + shockwave
+    Sfx.play('impact'); Sfx.play('boom');
+    Fx.flash(95, 0.95, [1, 0.5, 0.45]);
+    Fx.burst(ball.pos, { n: 30, speed: 3.0, colors: [[1, 1, 1], [1, 0.4, 0.4], [1, 0.85, 0.45]], life: 0.55, g: -2 });
+    Fx.ring([ball.pos[0], ball.pos[1] + 0.1, ball.pos[2]], { r0: 0.15, r1: 1.3, n: 16, life: 0.45, colors: [[1, 0.5, 0.45], [1, 1, 1]], s: 0.06 });
     ball.visible = false;
     enemy.visible = true;
     enemy.scl = [0.02, 0.02, 0.02];
     tw3(enemy.scl, [1, 1, 1], 300, 'outBack');
-    enemy.flashT = 0.35;
-    Fx.addTrauma(0.3);
+    enemy.flashT = 0.4;
+    Fx.addTrauma(0.4);
     Sfx.play('spawn');
     camDefault();
     yield 420;
@@ -3174,14 +3292,22 @@ const Battle = (() => {
   function* runSeq() {
     mode = 'none';
     camRun();
+    // crouch then explosive sprint away with a dust kick + speed lines
+    Sfx.play('charge');
+    tw3(player.scl, [1.16, 0.82, 1.16], 130, 'outQuad');
+    tw3(player.offset, [DIR_PM[0] * 0.3, 0, DIR_PM[2] * 0.3], 130, 'outQuad');
+    yield 150;
     Sfx.play('whoosh');
-    player.trailT = 0.45;
-    tw3(player.offset, [-DIR_PM[0] * 1.5, 0, -DIR_PM[2] * 1.5], 400, 'inQuad');
-    Fx.addTrauma(0.15);
-    Cam.kickFov(7, 320);
-    yield 200;
+    Fx.flash(45, 0.3);
+    Fx.burst([player.pos[0], 0.1, player.pos[2]], { n: 14, speed: 1.8, up: 1.0, g: -5, drag: 2, colors: [[0.6, 0.55, 0.45], [0.45, 0.4, 0.34], [1, 1, 1]], life: 0.45, s: 0.05 });
+    player.trailT = 0.5;
+    tw3(player.scl, [0.85, 1.15, 0.85], 120, 'outQuad', () => tw3(player.scl, [1, 1, 1], 200, 'outQuad'));
+    tw3(player.offset, [-DIR_PM[0] * 2.2, 0, -DIR_PM[2] * 2.2], 420, 'inQuad');
+    Fx.addTrauma(0.2);
+    Cam.kickFov(9, 340);
+    yield 240;
     Sfx.play('whoosh');
-    yield 260;
+    yield 230;
     yield* say(BData.MSG.fled, { auto: true });
     endBattle('run');
   }
