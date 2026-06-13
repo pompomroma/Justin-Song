@@ -152,7 +152,9 @@ const Game = (() => {
   function drawHud() {
     if (!showStats) return;
     const fps = Math.min(999, Math.round(1000 / Math.max(0.001, emaMs)));
-    const txt = fps + ' FPS  ' + glW + 'x' + glH;
+    const atCeil = glW >= ceilingW - 32;
+    const tag = (atCeil && ceilingW >= 7000) ? ' 8K' : (atCeil && ceilingW >= 3500 ? ' 4K' : '');
+    const txt = fps + ' FPS  ' + glW + 'x' + glH + tag;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(4, 46, PFont.width(txt, 1) + 12, 16);
     PFont.draw(ctx, txt, 10, 48, { scale: 1, color: fps >= 58 ? '#7cfc6a' : '#f8c838', outline: '#101018' });
@@ -215,8 +217,9 @@ const Game = (() => {
     scene.renderUi(ctx);
     const fa = Fx.flashAlpha();
     if (fa > 0) {
+      const fc = Fx.flashColor();
       ctx.globalAlpha = M3.clamp(fa, 0, 1);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'rgb(' + (fc[0] * 255 | 0) + ',' + (fc[1] * 255 | 0) + ',' + (fc[2] * 255 | 0) + ')';
       ctx.fillRect(0, 0, UI_VW, UI_VH);
       ctx.globalAlpha = 1;
     }

@@ -1849,15 +1849,23 @@ const Fx = (() => {
 
   // ------------------------------------------------- time / shake / flash
   let hitstopT = 0;       // seconds remaining, RAW time
+  let slowmoT = 0, slowmoScale = 1; // brief fractional time dilation (bullet-time)
   let trauma = 0;
   let shakeTime = 0;      // advances on RAW dt so frozen frames still rumble
-  let flashT = 0, flashDur = 0, flashPeak = 0;
+  let flashT = 0, flashDur = 0, flashPeak = 0, flashCol = [1, 1, 1];
 
-  const timeScale = () => (hitstopT > 0 ? 0 : 1);
+  // hitstop (full freeze) wins; otherwise slow-mo scales all scaled-time systems
+  const timeScale = () => (hitstopT > 0 ? 0 : (slowmoT > 0 ? slowmoScale : 1));
   const hitstop = (ms) => { hitstopT = Math.min(0.2, ms / 1000); };
+  const slowmo = (ms, scale) => { slowmoT = Math.max(slowmoT, ms / 1000); slowmoScale = scale === undefined ? 0.35 : scale; };
   const addTrauma = (x) => { trauma = M3.clamp(trauma + x, 0, 1); };
-  const flash = (ms, peak) => { flashDur = ms / 1000; flashT = flashDur; flashPeak = peak === undefined ? 1 : peak; };
+  const flash = (ms, peak, color) => {
+    flashDur = ms / 1000; flashT = flashDur;
+    flashPeak = peak === undefined ? 1 : peak;
+    flashCol = color || [1, 1, 1];
+  };
   const flashAlpha = () => (flashT > 0 && flashDur > 0 ? (flashT / flashDur) * flashPeak : 0);
+  const flashColor = () => flashCol;
 
   function shake() {
     const amp = trauma * trauma;
@@ -1927,6 +1935,7 @@ const Fx = (() => {
   function update(rawDt) {
     // RAW-time systems
     if (hitstopT > 0) hitstopT -= rawDt;
+    else if (slowmoT > 0) slowmoT -= rawDt; // only counts down once unfrozen
     shakeTime += rawDt;
     if (trans) {
       trans.t += rawDt;
@@ -2010,13 +2019,13 @@ const Fx = (() => {
     return { data: buffer, count: o / 9 };
   }
 
-  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; };
+  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; hitstopT = 0; slowmoT = 0; };
 
   return {
-    update, timeScale, hitstop, addTrauma, shake, flash, flashAlpha,
+    update, timeScale, hitstop, slowmo, addTrauma, shake, flash, flashAlpha, flashColor,
     burst, ring, streak, beam, dissolve, spawn, clear, particleData,
     transition, transitioning, transitionDraw,
-    _state: () => ({ hitstopT, trauma }), // for smoke tests
+    _state: () => ({ hitstopT, slowmoT, trauma }), // for smoke tests
   };
 })();
 </script>
@@ -2786,15 +2795,34 @@ const Battle = (() => {
     camDefault();
   }
 
-  /* CINDER — bespoke flashy fire choreography: inhale a swirling ember
-     vortex, unleash a sustained roaring fire-jet cone with heat shimmer
-     and licking flames, then a climactic white-hot fireball detonation
-     with twin shockwaves, ground scorch and lingering flame/smoke. */
+  // dynamic camera that sweeps along the fire path: behind the attacker,
+  // arcing out to a side profile, then settling on the impact 3/4 view
+  function camCinder(s) {
+    const u = sideActor(s), v = sideActor(other(s));
+    const d = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
+    const side = s === 'P' ? -1 : 1;
+    const mid = [(u.pos[0] + v.pos[0]) / 2, 0.7, (u.pos[2] + v.pos[2]) / 2];
+    Cam.play([
+      { t: 250, pos: [u.pos[0] - d[0] * 1.7 + PERP[0] * side * 0.8, 1.15, u.pos[2] - d[2] * 1.7 + PERP[2] * side * 0.8],
+        look: [u.pos[0], u.pos[1] + 0.6, u.pos[2]], fov: 47, ease: 'outQuad' },
+      { t: 980, pos: [mid[0] + PERP[0] * side * 2.4, 1.0, mid[2] + PERP[2] * side * 2.4],
+        look: mid, fov: 45, ease: 'inOutCubic' },
+      { t: 1640, pos: [v.pos[0] - d[0] * 1.7 - PERP[0] * side * 1.1, 0.82, v.pos[2] - d[2] * 1.7 - PERP[2] * side * 1.1],
+        look: [v.pos[0], v.pos[1] + 0.55, v.pos[2]], fov: 40, ease: 'inOutCubic' },
+    ]);
+  }
+
+  /* CINDER — bespoke flashy fire choreography: a helix ember vortex
+     inhaled to the mouth, a sustained roaring fire-jet cone with heat
+     shimmer and licking flames (camera sweeping along the blast), then a
+     bullet-time white-hot fireball — warm screen flash, twin shockwaves,
+     an erupting firestorm pillar, a chained second detonation, ground
+     scorch and lingering flame/smoke. */
   function* kindCinder(s, res) {
     const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
     const W = [1, 1, 1], YEL = [1, 0.85, 0.3], ORG = [1, 0.55, 0.18], RED = [0.95, 0.3, 0.08], SMK = [0.4, 0.38, 0.36];
     const fire = [W, YEL, ORG, RED];
-    camAtk(s);
+    camCinder(s);
     const mouth = head(u, 0.85);
     const tgt = chest(v);
     const d = [0, 0, 0]; M3.sub(d, tgt, mouth); M3.normalize(d, d);
@@ -2806,42 +2834,42 @@ const Battle = (() => {
       d[2] + (Math.cos(ang) * right[2] + Math.sin(ang) * up2[2]) * spr,
     ];
 
-    // 1) inhale — ember vortex spirals into the mouth, deep crouch
+    // 1) inhale — helix ember vortex spirals into the mouth, deep crouch
     Sfx.play('charge'); Sfx.play('roar');
     tw3(u.scl, [1.18, 0.8, 1.18], 360, 'outQuad');
-    for (let i = 0; i < 20; i++) {
-      const a = i * 0.95, r = 1.25 - i * 0.05;
+    for (let i = 0; i < 22; i++) {
+      const a = i * 0.8, r = 1.35 - i * 0.05, hy = (i / 22 - 0.5) * 0.9; // helix: shrinking radius, climbing height
       const px = mouth[0] + (Math.cos(a) * right[0] + Math.sin(a) * up2[0]) * r;
-      const py = mouth[1] + (Math.cos(a) * right[1] + Math.sin(a) * up2[1]) * r;
+      const py = mouth[1] + (Math.cos(a) * right[1] + Math.sin(a) * up2[1]) * r + hy;
       const pz = mouth[2] + (Math.cos(a) * right[2] + Math.sin(a) * up2[2]) * r;
       Fx.spawn({ p: [px, py, pz], c: fire[i % 4],
-                 v: [(mouth[0] - px) * 3.4, (mouth[1] - py) * 3.4 + 0.2, (mouth[2] - pz) * 3.4],
+                 v: [(mouth[0] - px) * 3.6, (mouth[1] - py) * 3.6 + 0.2, (mouth[2] - pz) * 3.6],
                  life: 0.34, s: 0.055, s1: 0.018 });
-      if (i % 5 === 4) yield 55;
+      if (i % 5 === 4) yield 52;
     }
-    Fx.burst(mouth, { n: 8, speed: 0.5, colors: [W, YEL], life: 0.3, s: 0.07, g: 0 });
-    Fx.addTrauma(0.18);
-    yield 130;
+    Fx.burst(mouth, { n: 10, speed: 0.5, colors: [W, YEL], life: 0.3, s: 0.075, g: 0 });
+    Fx.addTrauma(0.2);
+    yield 120;
 
     // 2) release — lunge + sustained roaring fire-jet cone
     Sfx.play('whoosh'); Sfx.play('roar');
-    Cam.kickFov(-5, 760);
+    Cam.kickFov(-5, 820);
     tw3(u.scl, [0.94, 1.14, 0.94], 180, 'outBack', () => tw3(u.scl, [1, 1, 1], 420, 'outQuad'));
     tw3(u.offset, [d[0] * 0.28, 0.04, d[2] * 0.28], 160, 'outQuad', () => tw3(u.offset, [0, 0, 0], 520, 'outQuad'));
-    Fx.beam(mouth, tgt, 780, { rate: 7, colors: [W, YEL, ORG], jitter: 0.14, s: 0.078 }); // bright core
+    Fx.beam(mouth, tgt, 820, { rate: 8, colors: [W, YEL, ORG], jitter: 0.14, s: 0.082 }); // bright core
     for (let i = 0; i < 16; i++) {
       Sfx.play('sizzle');
-      for (let k = 0; k < 5; k++) {
+      for (let k = 0; k < 6; k++) {
         const dir = fan(Math.random() * Math.PI * 2, Math.random() * 0.55);
-        const speed = 4.6 + Math.random() * 2.6;
+        const speed = 4.6 + Math.random() * 2.8;
         Fx.spawn({ p: mouth.slice(), c: fire[k % 4],
                    v: [dir[0] * speed, dir[1] * speed + 0.4, dir[2] * speed],
-                   g: -2.6, drag: 1.0, life: 0.32 + Math.random() * 0.14, s: 0.078, s1: 0.02 });
+                   g: -2.6, drag: 1.0, life: 0.32 + Math.random() * 0.14, s: 0.08, s1: 0.02 });
       }
       if (!res.miss && i > 2) {
         Fx.burst([tgt[0] + (Math.random() - 0.5) * 0.7, tgt[1] + (Math.random() - 0.5) * 0.5, tgt[2] + (Math.random() - 0.5) * 0.7],
                  { n: 4, speed: 1.9, up: 1.6, g: -3, colors: [ORG, YEL, SMK], life: 0.45, s: 0.06 });
-        Fx.addTrauma(0.14);
+        Fx.addTrauma(0.15);
         v.flashT = Math.max(v.flashT, 0.13);
         if (i % 3 === 0)
           Fx.spawn({ p: [tgt[0] + (Math.random() - 0.5) * 0.6, tgt[1], tgt[2] + (Math.random() - 0.5) * 0.6], c: SMK,
@@ -2849,25 +2877,44 @@ const Battle = (() => {
       }
       yield 46;
     }
-    yield 120;
+    yield 110;
 
-    // 3) climactic fireball detonation
+    // 3) climactic bullet-time fireball detonation
     if (!res.miss) {
       applyDamage(vs, res.dmg);
       Sfx.play('boom'); Sfx.play('impact');
-      Fx.hitstop(110);
-      Fx.flash(95, 0.95);
-      Fx.addTrauma(0.78);
-      Cam.kickFov(9, 200);
-      v.flashT = 0.42;
+      Fx.hitstop(120);
+      Fx.slowmo(440, 0.32);                 // bullet-time bloom after the freeze
+      Fx.flash(130, 1.0, [1, 0.82, 0.5]);   // warm fire-tinted screen flash
+      Fx.addTrauma(0.82);
+      Cam.kickFov(10, 220);
+      v.flashT = 0.45;
       camImpact(other(s));
-      Fx.burst(tgt, { n: 46, speed: 4.0, g: -3.2, colors: [W, YEL, ORG, RED], life: 0.7, s: 0.08 });
-      Fx.ring([v.pos[0], v.pos[1] + 0.12, v.pos[2]], { r0: 0.25, r1: 1.9, n: 20, life: 0.5, colors: [YEL, ORG], s: 0.08 });
-      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 1.5, n: 16, life: 0.45, colors: [SMK, RED], s: 0.06 }); // ground scorch
+      Fx.burst(tgt, { n: 50, speed: 4.2, g: -3.2, colors: [W, YEL, ORG, RED], life: 0.72, s: 0.085 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.12, v.pos[2]], { r0: 0.25, r1: 2.0, n: 22, life: 0.5, colors: [YEL, ORG], s: 0.085 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 1.6, n: 18, life: 0.48, colors: [SMK, RED], s: 0.065 }); // ground scorch
       const d2 = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
-      tw3(v.offset, [d2[0] * 0.6, 0, d2[2] * 0.6], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 440, 'outBack'));
-      tw3(v.scl, [1.15, 0.84, 1.15], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 420, 'outBack'));
-      yield 360;
+      tw3(v.offset, [d2[0] * 0.65, 0, d2[2] * 0.65], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 460, 'outBack'));
+      tw3(v.scl, [1.16, 0.83, 1.16], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 430, 'outBack'));
+      // erupting firestorm pillar
+      for (let i = 0; i < 5; i++) {
+        for (let k = 0; k < 5; k++) {
+          const a = Math.random() * Math.PI * 2, rr = Math.random() * 0.45;
+          Fx.spawn({ p: [v.pos[0] + Math.cos(a) * rr, 0.1 + Math.random() * 0.3, v.pos[2] + Math.sin(a) * rr],
+                     c: fire[k % 4], v: [Math.cos(a) * 0.6, 4.6 + Math.random() * 2.6, Math.sin(a) * 0.6],
+                     g: -2, drag: 0.3, life: 0.5 + Math.random() * 0.22, s: 0.085, s1: 0.02 });
+        }
+        yield 45;
+      }
+      // chained second detonation
+      Sfx.play('boom');
+      Fx.flash(70, 0.6, [1, 0.6, 0.3]);
+      Fx.addTrauma(0.4);
+      Cam.kickFov(6, 160);
+      v.flashT = Math.max(v.flashT, 0.3);
+      Fx.burst([v.pos[0], v.pos[1] + 0.3, v.pos[2]], { n: 26, speed: 3.4, g: -3, colors: [W, YEL, ORG], life: 0.6, s: 0.075 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.3, v.pos[2]], { r0: 0.2, r1: 1.4, n: 16, life: 0.42, colors: [YEL, W], s: 0.07 });
+      yield 220;
       for (let i = 0; i < 6; i++) { // lingering flames + smoke
         Fx.spawn({ p: [v.pos[0] + (Math.random() - 0.5) * 0.7, 0.1, v.pos[2] + (Math.random() - 0.5) * 0.7], c: ORG,
                    v: [0, 1.0 + Math.random() * 0.6, 0], drag: 0.7, life: 0.6, s: 0.06, s1: 0.01 });
@@ -3989,7 +4036,9 @@ const Game = (() => {
   function drawHud() {
     if (!showStats) return;
     const fps = Math.min(999, Math.round(1000 / Math.max(0.001, emaMs)));
-    const txt = fps + ' FPS  ' + glW + 'x' + glH;
+    const atCeil = glW >= ceilingW - 32;
+    const tag = (atCeil && ceilingW >= 7000) ? ' 8K' : (atCeil && ceilingW >= 3500 ? ' 4K' : '');
+    const txt = fps + ' FPS  ' + glW + 'x' + glH + tag;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(4, 46, PFont.width(txt, 1) + 12, 16);
     PFont.draw(ctx, txt, 10, 48, { scale: 1, color: fps >= 58 ? '#7cfc6a' : '#f8c838', outline: '#101018' });
@@ -4052,8 +4101,9 @@ const Game = (() => {
     scene.renderUi(ctx);
     const fa = Fx.flashAlpha();
     if (fa > 0) {
+      const fc = Fx.flashColor();
       ctx.globalAlpha = M3.clamp(fa, 0, 1);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'rgb(' + (fc[0] * 255 | 0) + ',' + (fc[1] * 255 | 0) + ',' + (fc[2] * 255 | 0) + ')';
       ctx.fillRect(0, 0, UI_VW, UI_VH);
       ctx.globalAlpha = 1;
     }

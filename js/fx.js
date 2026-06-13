@@ -96,15 +96,23 @@ const Fx = (() => {
 
   // ------------------------------------------------- time / shake / flash
   let hitstopT = 0;       // seconds remaining, RAW time
+  let slowmoT = 0, slowmoScale = 1; // brief fractional time dilation (bullet-time)
   let trauma = 0;
   let shakeTime = 0;      // advances on RAW dt so frozen frames still rumble
-  let flashT = 0, flashDur = 0, flashPeak = 0;
+  let flashT = 0, flashDur = 0, flashPeak = 0, flashCol = [1, 1, 1];
 
-  const timeScale = () => (hitstopT > 0 ? 0 : 1);
+  // hitstop (full freeze) wins; otherwise slow-mo scales all scaled-time systems
+  const timeScale = () => (hitstopT > 0 ? 0 : (slowmoT > 0 ? slowmoScale : 1));
   const hitstop = (ms) => { hitstopT = Math.min(0.2, ms / 1000); };
+  const slowmo = (ms, scale) => { slowmoT = Math.max(slowmoT, ms / 1000); slowmoScale = scale === undefined ? 0.35 : scale; };
   const addTrauma = (x) => { trauma = M3.clamp(trauma + x, 0, 1); };
-  const flash = (ms, peak) => { flashDur = ms / 1000; flashT = flashDur; flashPeak = peak === undefined ? 1 : peak; };
+  const flash = (ms, peak, color) => {
+    flashDur = ms / 1000; flashT = flashDur;
+    flashPeak = peak === undefined ? 1 : peak;
+    flashCol = color || [1, 1, 1];
+  };
   const flashAlpha = () => (flashT > 0 && flashDur > 0 ? (flashT / flashDur) * flashPeak : 0);
+  const flashColor = () => flashCol;
 
   function shake() {
     const amp = trauma * trauma;
@@ -174,6 +182,7 @@ const Fx = (() => {
   function update(rawDt) {
     // RAW-time systems
     if (hitstopT > 0) hitstopT -= rawDt;
+    else if (slowmoT > 0) slowmoT -= rawDt; // only counts down once unfrozen
     shakeTime += rawDt;
     if (trans) {
       trans.t += rawDt;
@@ -257,12 +266,12 @@ const Fx = (() => {
     return { data: buffer, count: o / 9 };
   }
 
-  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; };
+  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; hitstopT = 0; slowmoT = 0; };
 
   return {
-    update, timeScale, hitstop, addTrauma, shake, flash, flashAlpha,
+    update, timeScale, hitstop, slowmo, addTrauma, shake, flash, flashAlpha, flashColor,
     burst, ring, streak, beam, dissolve, spawn, clear, particleData,
     transition, transitioning, transitionDraw,
-    _state: () => ({ hitstopT, trauma }), // for smoke tests
+    _state: () => ({ hitstopT, slowmoT, trauma }), // for smoke tests
   };
 })();

@@ -211,6 +211,24 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   ok(Fx.particleData().count > 0, 'particles emit and build a vertex buffer');
   Fx.clear();
   ok(Fx.particleData().count === 0, 'Fx.clear empties the pool');
+
+  // slow-motion (bullet-time): fractional timescale that releases on raw time
+  Fx.slowmo(200, 0.3);
+  ok(Math.abs(Fx.timeScale() - 0.3) < 1e-6, 'slow-mo applies a fractional timescale');
+  // hitstop must still win over slow-mo
+  Fx.hitstop(50);
+  ok(Fx.timeScale() === 0, 'hitstop overrides slow-mo');
+  let s2 = 0;
+  while (Fx.timeScale() < 1 && s2 < 120) { Fx.update(1 / 60); s2++; }
+  ok(Fx.timeScale() === 1 && s2 <= 20, 'slow-mo releases on raw time (' + s2 + ' frames)');
+
+  // colored flash
+  Fx.flash(80, 1, [1, 0.5, 0.2]);
+  const fc = Fx.flashColor();
+  ok(fc[0] === 1 && Math.abs(fc[1] - 0.5) < 1e-6 && Fx.flashAlpha() > 0, 'flash carries a tint color');
+  Fx.flash(80, 1);
+  ok(Fx.flashColor()[0] === 1 && Fx.flashColor()[1] === 1, 'flash defaults to white');
+  Fx.clear();
 }
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
