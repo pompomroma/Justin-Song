@@ -1,7 +1,7 @@
-/* Grove Clash — stylesheet. The game renders to two fixed-resolution
-   canvases (480x270 WebGL world + 960x540 2D UI) stacked inside #stage,
-   which main.js sizes to a letterboxed 16:9 fit. Pixelated upscaling
-   gives the chunky HD-2D look. */
+/* Grove Clash — stylesheet. Two canvases (the WebGL world + the 2D UI)
+   are stacked inside #stage, which main.js sizes to a letterboxed 16:9
+   fit. Backing-store resolution and image-rendering are controlled in
+   JS (adaptive up to 8K; #retro restores the chunky pixelated look). */
 html, body {
   margin: 0;
   padding: 0;
@@ -26,8 +26,6 @@ body {
   top: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
 }
 
 #ui {

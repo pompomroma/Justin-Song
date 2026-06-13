@@ -13,6 +13,7 @@ const Input = (() => {
     KeyX: 'back', Escape: 'back', Backspace: 'back',
     KeyM: 'mute',
     KeyC: 'party',
+    KeyT: 'stats',
     KeyP: 'pose',
     ShiftLeft: 'fast', ShiftRight: 'fast',
     KeyI: 'lookUp', KeyK: 'lookDown', KeyJ: 'lookLeft', KeyL: 'lookRight',

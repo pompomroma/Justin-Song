@@ -30,7 +30,7 @@ const BData = (() => {
     PSYBLAST:  { name: 'Psyblast',  type: 'PSY',    power: 75, acc: 90,  pp: 20,
                  anim: 'orb',    fx: [[1, 0.4, 0.8], W, [0.78, 0.49, 1], [1, 0.8, 0.95]] },
     CINDER:    { name: 'Cinder',    type: 'FIRE',   power: 30, acc: 95,  pp: 25,
-                 anim: 'volley', fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.9, 0.25, 0.1]] },
+                 anim: 'cinder', fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.9, 0.25, 0.1]] },
     SCORCH:    { name: 'Scorch',    type: 'FIRE',   power: 70, acc: 90,  pp: 15,
                  anim: 'orb',    fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [1, 1, 0.8]] },
     LEAFRAZOR: { name: 'Leafrazor', type: 'LEAF',   power: 55, acc: 100, pp: 20,

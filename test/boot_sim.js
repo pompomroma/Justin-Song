@@ -29,7 +29,7 @@ function makeCtx2d() {
     fillRect() {}, clearRect() {}, strokeRect() {},
     beginPath() {}, moveTo() {}, lineTo() {}, closePath() {}, arc() {},
     fill() {}, stroke() {}, save() {}, restore() {},
-    translate() {}, scale() {}, drawImage() {}, fillText() {},
+    translate() {}, scale() {}, setTransform() {}, drawImage() {}, fillText() {},
     createLinearGradient() { return grad; },
   };
 }
@@ -46,10 +46,11 @@ function makeGl() {
   gl.getShaderParameter = () => true;
   gl.getProgramParameter = () => true;
   gl.getUniformLocation = () => ({ id: ++gl._n });
+  gl.getParameter = (p) => (p === gl.MAX_VIEWPORT_DIMS ? [16384, 16384] : 0);
   const CONSTS = ['VERTEX_SHADER', 'FRAGMENT_SHADER', 'COMPILE_STATUS', 'LINK_STATUS',
     'ARRAY_BUFFER', 'STATIC_DRAW', 'STREAM_DRAW', 'DEPTH_TEST', 'LEQUAL', 'CULL_FACE',
     'BLEND', 'SRC_ALPHA', 'ONE_MINUS_SRC_ALPHA', 'COLOR_BUFFER_BIT', 'DEPTH_BUFFER_BIT',
-    'TRIANGLES', 'FLOAT'];
+    'TRIANGLES', 'FLOAT', 'MAX_VIEWPORT_DIMS'];
   CONSTS.forEach((c, i) => { gl[c] = i + 1; });
   return gl;
 }
@@ -145,8 +146,10 @@ function attackCycle(sb) {
     const orig = Game.toOverworld;
     Game.toOverworld = (r) => { globalThis.__battleEnd = r; orig(r); };
   }.toString()})()`, sb);
-  sb.__pump(5);
+  sb.__pump(60);
   ok(sb.__errors.length === 0, 'battle boots without errors');
+  const glw = vm.runInContext('document.getElementById("gl").width', sb);
+  ok(glw > 480, 'adaptive resolution scaled the 3D buffer up (' + glw + 'px wide)');
   // play: keep attacking (with forced switches) for up to ~11 sim-minutes
   let frames = 0;
   while (frames < 40000 && !vm.runInContext('globalThis.__battleEnd', sb)) {

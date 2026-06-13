@@ -119,6 +119,13 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
      BData.captureChance(0.5) > 0.25 && BData.captureChance(0.5) < 0.9, 'capture odds scale with damage');
   ok(BData.ITEMS.heal.uses === 3 && BData.ITEMS.cure.uses === 3, 'items carry 3 charges each');
 
+  const ANIM_KINDS = ['dash', 'rings', 'beam', 'orb', 'volley', 'cinder'];
+  let badAnim = null;
+  for (const id in BData.MOVES)
+    if (ANIM_KINDS.indexOf(BData.MOVES[id].anim) < 0) badAnim = id;
+  ok(!badAnim, 'every move has a known anim kind' + (badAnim ? ' (bad: ' + badAnim + ')' : ''));
+  ok(BData.MOVES.CINDER.anim === 'cinder', 'Cinder uses its bespoke fire animation');
+
   const mkRng = (seq) => { let i = 0; return () => (i < seq.length ? seq[i++] : seq[seq.length - 1]); };
 
   // golden: PIXLIT Psyblast -> MAGMULE, hit, no crit

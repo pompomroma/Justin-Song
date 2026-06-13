@@ -79,6 +79,11 @@ const Sfx = (() => {
     zap:     () => tone({ f0: 1400, f1: 220, dur: 0.14, vol: 0.16, type: 'square' }),
     growl:   () => tone({ f0: 360, f1: 110, dur: 0.5, vol: 0.2, type: 'sawtooth' }),
     sizzle:  () => noise({ f0: 2400, f1: 4200, dur: 0.28, vol: 0.12, ftype: 'highpass' }),
+    roar:    () => {
+      noise({ f0: 620, f1: 130, dur: 0.6, vol: 0.34, ftype: 'lowpass', q: 1.6 });
+      tone({ f0: 120, f1: 58, dur: 0.55, vol: 0.2, type: 'sawtooth' });
+      tone({ f0: 240, f1: 90, dur: 0.5, vol: 0.12, type: 'square', delay: 0.05 });
+    },
     boom:    () => {
       noise({ f0: 700, f1: 60, dur: 0.45, vol: 0.6 });
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });

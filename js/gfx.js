@@ -136,5 +136,11 @@ void main() {
     gl.drawArrays(gl.TRIANGLES, 0, count);
   }
 
-  return { init, upload, begin, draw, drawDynamic, ok: () => !!gl };
+  // largest square viewport the GPU will allow (caps the 8K target)
+  function maxDim() {
+    try { const d = gl.getParameter(gl.MAX_VIEWPORT_DIMS); return Math.min(d[0], d[1]) || 4096; }
+    catch (e) { return 4096; }
+  }
+
+  return { init, upload, begin, draw, drawDynamic, maxDim, ok: () => !!gl };
 })();

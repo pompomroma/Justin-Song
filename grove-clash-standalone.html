@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grove Clash — Voxel Monster Battle Prototype</title>
 <style>
-/* Grove Clash — stylesheet. The game renders to two fixed-resolution
-   canvases (480x270 WebGL world + 960x540 2D UI) stacked inside #stage,
-   which main.js sizes to a letterboxed 16:9 fit. Pixelated upscaling
-   gives the chunky HD-2D look. */
+/* Grove Clash — stylesheet. Two canvases (the WebGL world + the 2D UI)
+   are stacked inside #stage, which main.js sizes to a letterboxed 16:9
+   fit. Backing-store resolution and image-rendering are controlled in
+   JS (adaptive up to 8K; #retro restores the chunky pixelated look). */
 html, body {
   margin: 0;
   padding: 0;
@@ -33,8 +33,6 @@ body {
   top: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
 }
 
 #ui {
@@ -221,6 +219,7 @@ const Input = (() => {
     KeyX: 'back', Escape: 'back', Backspace: 'back',
     KeyM: 'mute',
     KeyC: 'party',
+    KeyT: 'stats',
     KeyP: 'pose',
     ShiftLeft: 'fast', ShiftRight: 'fast',
     KeyI: 'lookUp', KeyK: 'lookDown', KeyJ: 'lookLeft', KeyL: 'lookRight',
@@ -367,6 +366,11 @@ const Sfx = (() => {
     zap:     () => tone({ f0: 1400, f1: 220, dur: 0.14, vol: 0.16, type: 'square' }),
     growl:   () => tone({ f0: 360, f1: 110, dur: 0.5, vol: 0.2, type: 'sawtooth' }),
     sizzle:  () => noise({ f0: 2400, f1: 4200, dur: 0.28, vol: 0.12, ftype: 'highpass' }),
+    roar:    () => {
+      noise({ f0: 620, f1: 130, dur: 0.6, vol: 0.34, ftype: 'lowpass', q: 1.6 });
+      tone({ f0: 120, f1: 58, dur: 0.55, vol: 0.2, type: 'sawtooth' });
+      tone({ f0: 240, f1: 90, dur: 0.5, vol: 0.12, type: 'square', delay: 0.05 });
+    },
     boom:    () => {
       noise({ f0: 700, f1: 60, dur: 0.45, vol: 0.6 });
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
@@ -1305,7 +1309,13 @@ void main() {
     gl.drawArrays(gl.TRIANGLES, 0, count);
   }
 
-  return { init, upload, begin, draw, drawDynamic, ok: () => !!gl };
+  // largest square viewport the GPU will allow (caps the 8K target)
+  function maxDim() {
+    try { const d = gl.getParameter(gl.MAX_VIEWPORT_DIMS); return Math.min(d[0], d[1]) || 4096; }
+    catch (e) { return 4096; }
+  }
+
+  return { init, upload, begin, draw, drawDynamic, maxDim, ok: () => !!gl };
 })();
 </script>
 <script>
@@ -2161,7 +2171,7 @@ const BData = (() => {
     PSYBLAST:  { name: 'Psyblast',  type: 'PSY',    power: 75, acc: 90,  pp: 20,
                  anim: 'orb',    fx: [[1, 0.4, 0.8], W, [0.78, 0.49, 1], [1, 0.8, 0.95]] },
     CINDER:    { name: 'Cinder',    type: 'FIRE',   power: 30, acc: 95,  pp: 25,
-                 anim: 'volley', fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.9, 0.25, 0.1]] },
+                 anim: 'cinder', fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.9, 0.25, 0.1]] },
     SCORCH:    { name: 'Scorch',    type: 'FIRE',   power: 70, acc: 90,  pp: 15,
                  anim: 'orb',    fx: [[1, 0.48, 0.16], [1, 0.72, 0.2], [1, 1, 0.8]] },
     LEAFRAZOR: { name: 'Leafrazor', type: 'LEAF',   power: 55, acc: 100, pp: 20,
@@ -2776,8 +2786,105 @@ const Battle = (() => {
     camDefault();
   }
 
+  /* CINDER — bespoke flashy fire choreography: inhale a swirling ember
+     vortex, unleash a sustained roaring fire-jet cone with heat shimmer
+     and licking flames, then a climactic white-hot fireball detonation
+     with twin shockwaves, ground scorch and lingering flame/smoke. */
+  function* kindCinder(s, res) {
+    const u = sideActor(s), v = sideActor(other(s)), vs = sideState(other(s));
+    const W = [1, 1, 1], YEL = [1, 0.85, 0.3], ORG = [1, 0.55, 0.18], RED = [0.95, 0.3, 0.08], SMK = [0.4, 0.38, 0.36];
+    const fire = [W, YEL, ORG, RED];
+    camAtk(s);
+    const mouth = head(u, 0.85);
+    const tgt = chest(v);
+    const d = [0, 0, 0]; M3.sub(d, tgt, mouth); M3.normalize(d, d);
+    const right = [0, 0, 0]; M3.cross(right, d, [0, 1, 0]); M3.normalize(right, right);
+    const up2 = [0, 0, 0]; M3.cross(up2, right, d); M3.normalize(up2, up2);
+    const fan = (ang, spr) => [
+      d[0] + (Math.cos(ang) * right[0] + Math.sin(ang) * up2[0]) * spr,
+      d[1] + (Math.cos(ang) * right[1] + Math.sin(ang) * up2[1]) * spr,
+      d[2] + (Math.cos(ang) * right[2] + Math.sin(ang) * up2[2]) * spr,
+    ];
+
+    // 1) inhale — ember vortex spirals into the mouth, deep crouch
+    Sfx.play('charge'); Sfx.play('roar');
+    tw3(u.scl, [1.18, 0.8, 1.18], 360, 'outQuad');
+    for (let i = 0; i < 20; i++) {
+      const a = i * 0.95, r = 1.25 - i * 0.05;
+      const px = mouth[0] + (Math.cos(a) * right[0] + Math.sin(a) * up2[0]) * r;
+      const py = mouth[1] + (Math.cos(a) * right[1] + Math.sin(a) * up2[1]) * r;
+      const pz = mouth[2] + (Math.cos(a) * right[2] + Math.sin(a) * up2[2]) * r;
+      Fx.spawn({ p: [px, py, pz], c: fire[i % 4],
+                 v: [(mouth[0] - px) * 3.4, (mouth[1] - py) * 3.4 + 0.2, (mouth[2] - pz) * 3.4],
+                 life: 0.34, s: 0.055, s1: 0.018 });
+      if (i % 5 === 4) yield 55;
+    }
+    Fx.burst(mouth, { n: 8, speed: 0.5, colors: [W, YEL], life: 0.3, s: 0.07, g: 0 });
+    Fx.addTrauma(0.18);
+    yield 130;
+
+    // 2) release — lunge + sustained roaring fire-jet cone
+    Sfx.play('whoosh'); Sfx.play('roar');
+    Cam.kickFov(-5, 760);
+    tw3(u.scl, [0.94, 1.14, 0.94], 180, 'outBack', () => tw3(u.scl, [1, 1, 1], 420, 'outQuad'));
+    tw3(u.offset, [d[0] * 0.28, 0.04, d[2] * 0.28], 160, 'outQuad', () => tw3(u.offset, [0, 0, 0], 520, 'outQuad'));
+    Fx.beam(mouth, tgt, 780, { rate: 7, colors: [W, YEL, ORG], jitter: 0.14, s: 0.078 }); // bright core
+    for (let i = 0; i < 16; i++) {
+      Sfx.play('sizzle');
+      for (let k = 0; k < 5; k++) {
+        const dir = fan(Math.random() * Math.PI * 2, Math.random() * 0.55);
+        const speed = 4.6 + Math.random() * 2.6;
+        Fx.spawn({ p: mouth.slice(), c: fire[k % 4],
+                   v: [dir[0] * speed, dir[1] * speed + 0.4, dir[2] * speed],
+                   g: -2.6, drag: 1.0, life: 0.32 + Math.random() * 0.14, s: 0.078, s1: 0.02 });
+      }
+      if (!res.miss && i > 2) {
+        Fx.burst([tgt[0] + (Math.random() - 0.5) * 0.7, tgt[1] + (Math.random() - 0.5) * 0.5, tgt[2] + (Math.random() - 0.5) * 0.7],
+                 { n: 4, speed: 1.9, up: 1.6, g: -3, colors: [ORG, YEL, SMK], life: 0.45, s: 0.06 });
+        Fx.addTrauma(0.14);
+        v.flashT = Math.max(v.flashT, 0.13);
+        if (i % 3 === 0)
+          Fx.spawn({ p: [tgt[0] + (Math.random() - 0.5) * 0.6, tgt[1], tgt[2] + (Math.random() - 0.5) * 0.6], c: SMK,
+                     v: [0, 1.3, 0], drag: 0.6, life: 0.7, s: 0.07, s1: 0.13 });
+      }
+      yield 46;
+    }
+    yield 120;
+
+    // 3) climactic fireball detonation
+    if (!res.miss) {
+      applyDamage(vs, res.dmg);
+      Sfx.play('boom'); Sfx.play('impact');
+      Fx.hitstop(110);
+      Fx.flash(95, 0.95);
+      Fx.addTrauma(0.78);
+      Cam.kickFov(9, 200);
+      v.flashT = 0.42;
+      camImpact(other(s));
+      Fx.burst(tgt, { n: 46, speed: 4.0, g: -3.2, colors: [W, YEL, ORG, RED], life: 0.7, s: 0.08 });
+      Fx.ring([v.pos[0], v.pos[1] + 0.12, v.pos[2]], { r0: 0.25, r1: 1.9, n: 20, life: 0.5, colors: [YEL, ORG], s: 0.08 });
+      Fx.ring([v.pos[0], 0.06, v.pos[2]], { r0: 0.3, r1: 1.5, n: 16, life: 0.45, colors: [SMK, RED], s: 0.06 }); // ground scorch
+      const d2 = s === 'P' ? DIR_PM : [-DIR_PM[0], 0, -DIR_PM[2]];
+      tw3(v.offset, [d2[0] * 0.6, 0, d2[2] * 0.6], 170, 'outQuad', () => tw3(v.offset, [0, 0, 0], 440, 'outBack'));
+      tw3(v.scl, [1.15, 0.84, 1.15], 150, 'outQuad', () => tw3(v.scl, [1, 1, 1], 420, 'outBack'));
+      yield 360;
+      for (let i = 0; i < 6; i++) { // lingering flames + smoke
+        Fx.spawn({ p: [v.pos[0] + (Math.random() - 0.5) * 0.7, 0.1, v.pos[2] + (Math.random() - 0.5) * 0.7], c: ORG,
+                   v: [0, 1.0 + Math.random() * 0.6, 0], drag: 0.7, life: 0.6, s: 0.06, s1: 0.01 });
+        Fx.spawn({ p: [v.pos[0] + (Math.random() - 0.5) * 0.8, 0.2, v.pos[2] + (Math.random() - 0.5) * 0.8], c: SMK,
+                   v: [0, 0.8, 0], drag: 0.6, life: 0.8, s: 0.07, s1: 0.13 });
+        yield 60;
+      }
+      yield drained(vs);
+    } else {
+      Fx.burst([tgt[0] + 1.2, tgt[1], tgt[2] + 1.0], { n: 10, speed: 2.2, colors: [ORG, SMK], life: 0.5 });
+      yield 360;
+    }
+    camDefault();
+  }
+
   const ANIM_KINDS = {
-    dash: kindDash, rings: kindRings, beam: kindBeam, orb: kindOrb, volley: kindVolley,
+    dash: kindDash, rings: kindRings, beam: kindBeam, orb: kindOrb, volley: kindVolley, cinder: kindCinder,
   };
 
   // ----------------------------------------------------------- turn logic
@@ -3729,15 +3836,29 @@ const Overworld = (() => {
 </script>
 <script>
 /* Grove Clash — js/main.js
-   Game: boot, canvas letterboxing, fixed-timestep loop, scene switching
-   with transitions, persistent save state, on-screen error overlay
-   (the Replit webview hides the console) and debug hash modes:
-   #battle (skip straight to battle), #fly (free camera), #viewer
-   (model inspector). */
+   Game: boot, adaptive-resolution canvas system, fixed-timestep loop,
+   scene switching with transitions, persistent save, on-screen error
+   overlay and debug hash modes.
+
+   RESOLUTION & FRAMERATE
+   The 3D world renders to a backing store that scales DOWN to protect a
+   hard 60 FPS floor and UP toward an 8K ceiling whenever the GPU has
+   headroom (adaptive supersampling). The 2D UI keeps a fixed 960x540
+   virtual coordinate system (so ui.js never changes) but its backing
+   store is rendered at display/high resolution via a context scale, so
+   panels and text stay razor-crisp at any size. A live HUD (toggle: T)
+   reports FPS and the actual render resolution.
+
+   Hash modes: #battle #fly #viewer ; #8k forces the 8K ceiling (adaptive
+   off) ; #retro restores the original 480x270 pixelated look. */
 const Game = (() => {
 
-  const GL_W = 480, GL_H = 270, UI_W = 960, UI_H = 540;
-  const STEP = 1 / 60;
+  const UI_VW = 960, UI_VH = 540;   // virtual UI coordinate space (fixed)
+  const AR = 16 / 9;
+  const STEP = 1 / 60;              // fixed simulation step
+  const CAP_W = 7680;              // 8K width ceiling
+  const UI_CAP = 3840;            // UI backing capped at 4K wide (crisp enough; bounds memory)
+  const MIN_GL_W = 480;          // never scale the 3D world below this
 
   let glCanvas = null, uiCanvas = null, ctx = null, stage = null;
   let scene = null;
@@ -3745,6 +3866,13 @@ const Game = (() => {
   let errorLines = null;
   let viewRect = { left: 0, top: 0, w: 1, h: 1 };
   const handles = {};
+
+  // resolution / perf state
+  let dpr = 1, cssW = UI_VW, cssH = UI_VH, uiScale = 1;
+  let ceilingW = CAP_W, minScale = 1, glScale = 1, glW = UI_VW, glH = UI_VH;
+  let adaptiveOn = true, started = false, retro = false;
+  let emaMs = 16.7, adaptCount = 0;
+  let showStats = true;
 
   // hp: null means "full HP" (resolved against statsFor at battle start)
   const save = {
@@ -3779,22 +3907,64 @@ const Game = (() => {
     Fx.transition('fade', () => switchNow('overworld', { result }), null);
   }
 
-  // ------------------------------------------------------------ layout
+  // ----------------------------------------------------- resolution
+  // Size the 3D backing store from the current adaptive scale (snapped to
+  // 32px steps to avoid reallocating the backbuffer on every nudge).
+  function applyRes() {
+    let w = Math.round(ceilingW * glScale / 32) * 32;
+    w = M3.clamp(w, MIN_GL_W, ceilingW);
+    const h = Math.round(w / AR);
+    if (glCanvas.width !== w || glCanvas.height !== h) {
+      glCanvas.width = w;
+      glCanvas.height = h;
+    }
+    glW = glCanvas.width; glH = glCanvas.height;
+  }
+
   function resize() {
-    const intSnap = /[?#&]int=1/.test(location.href);
-    let s = Math.min(window.innerWidth / UI_W, window.innerHeight / UI_H);
-    if (intSnap && s >= 1) s = Math.floor(s);
-    const w = Math.round(UI_W * s), h = Math.round(UI_H * s);
-    stage.style.width = w + 'px';
-    stage.style.height = h + 'px';
+    const fit = Math.min(window.innerWidth / UI_VW, window.innerHeight / UI_VH);
+    cssW = Math.max(1, Math.round(UI_VW * fit));
+    cssH = Math.max(1, Math.round(UI_VH * fit));
+    stage.style.width = cssW + 'px';
+    stage.style.height = cssH + 'px';
     const r = stage.getBoundingClientRect();
-    viewRect = { left: r.left, top: r.top, w, h };
+    viewRect = { left: r.left, top: r.top, w: cssW, h: cssH };
+
+    // UI backing store: crisp at display resolution, capped at 4K wide.
+    const uiW = retro ? UI_VW : M3.clamp(Math.round(cssW * dpr), UI_VW, UI_CAP);
+    uiScale = uiW / UI_VW;
+    const uiWpx = Math.round(UI_VW * uiScale), uiHpx = Math.round(UI_VH * uiScale);
+    if (uiCanvas.width !== uiWpx || uiCanvas.height !== uiHpx) {
+      uiCanvas.width = uiWpx; uiCanvas.height = uiHpx;
+      ctx.imageSmoothingEnabled = false; // canvas resize resets context state
+    }
+
+    // First sizing: start the 3D world at display-native scale, then let
+    // the adaptive controller climb toward 8K if there's headroom.
+    if (!started) {
+      glScale = adaptiveOn ? M3.clamp((cssW * dpr) / ceilingW, minScale, 1) : 1;
+      started = true;
+    }
+    applyRes();
+  }
+
+  // Hold 60 FPS: shed resolution when frames run long, reclaim it (toward
+  // the 8K ceiling) when there's spare budget. Hysteresis avoids churn.
+  function adaptTick() {
+    if (!adaptiveOn) return;
+    if (++adaptCount < 30) return;
+    adaptCount = 0;
+    if (emaMs > 17.5 && glScale > minScale) {
+      glScale = Math.max(minScale, glScale * 0.82); applyRes();
+    } else if (emaMs < 14.0 && glScale < 1) {
+      glScale = Math.min(1, glScale * 1.10); applyRes();
+    }
   }
 
   function mapper(cx, cy) {
-    const x = (cx - viewRect.left) / viewRect.w * UI_W;
-    const y = (cy - viewRect.top) / viewRect.h * UI_H;
-    if (x < 0 || y < 0 || x > UI_W || y > UI_H) return null;
+    const x = (cx - viewRect.left) / viewRect.w * UI_VW;
+    const y = (cy - viewRect.top) / viewRect.h * UI_VH;
+    if (x < 0 || y < 0 || x > UI_VW || y > UI_VH) return null;
     return { x, y };
   }
 
@@ -3814,6 +3984,15 @@ const Game = (() => {
     for (let i = 0; i < errorLines.length; i++)
       ctx.fillText(errorLines[i].slice(0, 110), 32, 66 + i * 20);
     ctx.restore();
+  }
+
+  function drawHud() {
+    if (!showStats) return;
+    const fps = Math.min(999, Math.round(1000 / Math.max(0.001, emaMs)));
+    const txt = fps + ' FPS  ' + glW + 'x' + glH;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(4, 46, PFont.width(txt, 1) + 12, 16);
+    PFont.draw(ctx, txt, 10, 48, { scale: 1, color: fps >= 58 ? '#7cfc6a' : '#f8c838', outline: '#101018' });
   }
 
   // ------------------------------------------------------------- viewer
@@ -3858,34 +4037,40 @@ const Game = (() => {
   function update(dt) {
     Fx.update(dt);
     if (Input.pressed('mute')) Sfx.toggleMute();
+    if (Input.pressed('stats')) showStats = !showStats;
     if (scene && scene.update) scene.update(dt);
     Input.postUpdate();
   }
 
   function render() {
     if (!scene) return;
-    scene.render3d(GL_W / GL_H);
-    ctx.clearRect(0, 0, UI_W, UI_H);
+    scene.render3d(glW / glH);
+    // all UI draws happen in the fixed 960x540 space; the transform scales
+    // them up to the high-resolution backing store.
+    ctx.setTransform(uiScale, 0, 0, uiScale, 0, 0);
+    ctx.clearRect(0, 0, UI_VW, UI_VH);
     scene.renderUi(ctx);
     const fa = Fx.flashAlpha();
     if (fa > 0) {
       ctx.globalAlpha = M3.clamp(fa, 0, 1);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, UI_W, UI_H);
+      ctx.fillRect(0, 0, UI_VW, UI_VH);
       ctx.globalAlpha = 1;
     }
     Fx.transitionDraw(ctx);
     if (Sfx.isMuted())
       PFont.draw(ctx, 'MUTED', 884, 8, { scale: 2, color: '#f8c838' });
+    drawHud();
     drawErrorOverlay();
   }
 
   function loop(now) {
     requestAnimationFrame(loop);
+    const real = (now - last) / 1000 || 0.016;
+    last = now;
+    emaMs = emaMs * 0.9 + (real * 1000) * 0.1;
     try {
-      const dt = Math.min(0.1, (now - last) / 1000 || 0.016);
-      last = now;
-      acc += dt;
+      acc += Math.min(0.1, real);
       let n = 0;
       while (acc >= STEP && n < 5) { update(STEP); acc -= STEP; n++; }
       if (n === 5) acc = 0;
@@ -3895,6 +4080,7 @@ const Game = (() => {
       try { render(); } catch (e2) { /* keep the loop alive */ }
       console.error(e);
     }
+    adaptTick();
   }
 
   // ---------------------------------------------------------------- boot
@@ -3902,8 +4088,6 @@ const Game = (() => {
     stage = document.getElementById('stage');
     glCanvas = document.getElementById('gl');
     uiCanvas = document.getElementById('ui');
-    glCanvas.width = GL_W; glCanvas.height = GL_H;
-    uiCanvas.width = UI_W; uiCanvas.height = UI_H;
     ctx = uiCanvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
 
@@ -3914,10 +4098,24 @@ const Game = (() => {
     try { glOk = Gfx.init(glCanvas); }
     catch (e) { showError('WebGL init failed:\n' + ((e && e.message) || e)); }
     if (!glOk) {
+      uiCanvas.width = UI_VW; uiCanvas.height = UI_VH;
       if (!errorLines) showError('WebGL is not available in this browser.');
       drawErrorOverlay();
       return;
     }
+
+    const href = location.href;
+    dpr = window.devicePixelRatio || 1;
+    retro = /[#&?]retro/.test(href);
+    const force8k = /[#&?]8k/.test(href);
+    const gpuMax = Gfx.maxDim();
+    ceilingW = retro ? MIN_GL_W : Math.min(CAP_W, gpuMax);
+    minScale = MIN_GL_W / ceilingW;
+    adaptiveOn = !retro && !force8k;
+    glScale = 1; // resize() sets the real starting scale
+    const ir = retro ? 'pixelated' : 'auto';
+    glCanvas.style.imageRendering = ir;
+    uiCanvas.style.imageRendering = ir;
 
     Input.init({ mapper, onFirstInteraction: () => Sfx.unlock() });
     window.addEventListener('resize', resize);

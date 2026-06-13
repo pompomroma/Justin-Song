@@ -74,11 +74,27 @@ modules, no fetch).
 | X / Esc | Back out of a submenu |
 | C | Open the party panel (switch allies) |
 | M | Mute / unmute |
+| T | Toggle the FPS / resolution readout |
 | Mouse | Click buttons/party rows, click to advance text |
 
 Lose and you black out (party fully healed); win, run, or capture and
 REX will want a rematch. PIXLIT starts its first fight at 17/28 HP —
 lean on your bench.
+
+## Resolution & framerate
+
+The 3D world renders to an **adaptive backing store**: it scales up
+toward an **8K ceiling** (7680px wide, or the GPU's max) whenever there
+is frame-budget headroom, and scales down to **protect a 60 FPS floor**
+when frames run long — so it stays smooth on a laptop and razor-sharp on
+a 4K/8K display. The 2D UI keeps a fixed 960×540 layout but its backing
+store is rendered at display resolution, so panels and text stay crisp.
+The simulation is a fixed 60 Hz step; rendering runs every animation
+frame (60+ FPS on a 60/120/144 Hz display). Press **T** for the live
+FPS / resolution readout.
+
+- `index.html#8k` — force the full 8K ceiling (adaptive scaling off)
+- `index.html#retro` — original 480×270 chunky-pixel look
 
 ## Debug modes (URL hash)
 
