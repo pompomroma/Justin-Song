@@ -94,6 +94,64 @@ const Fx = (() => {
     }
   }
 
+  // ---- electric / lightning effects ----
+  // a jagged lightning bolt from -> to (cubes laid along zig-zag segments,
+  // amplitude tapering to 0 at the endpoints), with optional forks.
+  function bolt(from, to, o) {
+    o = o || {};
+    const segs = o.segs || 8, jitter = o.jitter || 0.5, dense = o.dense || 4;
+    const colors = o.colors || [[1, 1, 1], [0.62, 0.86, 1], [0.82, 0.92, 1]];
+    const life = o.life || 0.14, s = o.s || 0.06;
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, amp = jitter * Math.sin(u * Math.PI);
+      pts.push([from[0] + (to[0] - from[0]) * u + (rnd() - 0.5) * amp,
+                from[1] + (to[1] - from[1]) * u + (rnd() - 0.5) * amp,
+                from[2] + (to[2] - from[2]) * u + (rnd() - 0.5) * amp]);
+    }
+    for (let i = 0; i < segs; i++) {
+      const a = pts[i], b = pts[i + 1];
+      for (let k = 0; k < dense; k++) {
+        const t = k / dense;
+        spawn({ p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+                c: pick(colors, rnd), v: [0, 0, 0], life: life * (0.7 + rnd() * 0.6), s, s1: 0.008 });
+      }
+    }
+    const forks = o.forks || 0;
+    for (let f = 0; f < forks; f++) {
+      const i = 1 + Math.floor(rnd() * (segs - 1)), a = pts[i], len = o.forkLen || 0.6;
+      const dx = (rnd() - 0.5), dy = (rnd() - 0.5), dz = (rnd() - 0.5);
+      for (let k = 0; k < 4; k++) {
+        const t = k / 4;
+        spawn({ p: [a[0] + dx * len * t, a[1] + dy * len * t, a[2] + dz * len * t],
+                c: pick(colors, rnd), v: [0, 0, 0], life: life * 0.8, s: s * 0.85, s1: 0.006 });
+      }
+    }
+  }
+
+  // a burst of bright fast sparks (tiny cubes flying out under gravity)
+  function sparks(p, o) {
+    o = o || {};
+    const n = o.n || 14, colors = o.colors || [[1, 1, 1], [0.7, 0.9, 1], [0.85, 0.95, 1]];
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, b = (rnd() - 0.5) * Math.PI, sp = (o.speed || 4) * (0.5 + rnd());
+      spawn({ p: [p[0], p[1], p[2]], c: pick(colors, rnd),
+              v: [Math.cos(a) * Math.cos(b) * sp, Math.sin(b) * sp + (o.up || 1), Math.sin(a) * Math.cos(b) * sp],
+              g: o.g !== undefined ? o.g : -7, drag: 1.5, life: (o.life || 0.32) * (0.6 + rnd() * 0.7), s: o.s || 0.045, s1: 0.004 });
+    }
+  }
+
+  // a few short bolts radiating from a point (charge/idle electric crackle)
+  function crackle(p, o) {
+    o = o || {};
+    const n = o.n || 3, len = o.len || 0.6, colors = o.colors || [[1, 1, 1], [0.6, 0.85, 1]];
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, e = (rnd() - 0.5) * 1.2;
+      bolt(p, [p[0] + Math.cos(a) * Math.cos(e) * len, p[1] + Math.sin(e) * len, p[2] + Math.sin(a) * Math.cos(e) * len],
+           { segs: 4, jitter: 0.16, colors, life: 0.12, s: 0.05, dense: 3 });
+    }
+  }
+
   // ------------------------------------------------- time / shake / flash
   let hitstopT = 0;       // seconds remaining, RAW time
   let slowmoT = 0, slowmoScale = 1; // brief fractional time dilation (bullet-time)
@@ -323,7 +381,7 @@ const Fx = (() => {
   return {
     update, timeScale, hitstop, slowmo, addTrauma, shake, flash, flashAlpha, flashColor,
     pulseLight, lightState,
-    burst, ring, streak, beam, dissolve, spawn, clear, particleData,
+    burst, ring, streak, beam, dissolve, bolt, sparks, crackle, spawn, clear, particleData,
     transition, transitioning, transitionDraw,
     _state: () => ({ hitstopT, slowmoT, trauma }), // for smoke tests
   };

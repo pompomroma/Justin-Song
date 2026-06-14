@@ -143,9 +143,18 @@ const Battle = (() => {
   const sideState = (s) => (s === 'P' ? pState : eState);
   const other = (s) => (s === 'P' ? 'E' : 'P');
 
+  const ELEC = [[1, 1, 1], [0.62, 0.86, 1], [0.82, 0.92, 1]]; // electric white-blue
   function applyDamage(st, dmg) {
     st.hp = Math.max(0, st.hp - dmg);
     st.drainRate = Math.max(14, Math.abs(st.displayHp - st.hp) / 0.7);
+    // electric impact — a thunder bolt strikes the target + sparks (every hit,
+    // every monster, normal and boss battles)
+    const a = (st === pState) ? player : enemy;
+    const tp = chest(a);
+    Fx.bolt([tp[0] + (Math.random() - 0.5) * 0.5, tp[1] + 2.8, tp[2] + (Math.random() - 0.5) * 0.5], tp,
+            { segs: 9, jitter: 0.6, colors: ELEC, life: 0.16, s: 0.07, dense: 4, forks: 2, forkLen: 0.7 });
+    Fx.sparks(tp, { n: 16, speed: 4.6, colors: ELEC, up: 1.4, life: 0.34, s: 0.05 });
+    Sfx.play('thunder');
   }
   function applyHeal(st, amount) {
     st.hp = Math.min(st.stats.maxHp, st.hp + amount);
@@ -928,6 +937,10 @@ const Battle = (() => {
                      { def: os.stats.def, defStage: 0 }, move, rngBattle)
       : { dmg: 0, crit: false, miss: rngBattle() * 100 >= move.acc };
     yield* say(BData.fmt(BData.MSG.used, { A: st.name, M: move.name }), { auto: true, hold: 320 });
+    // electric wind-up: the attacker crackles with energy as the move begins
+    Fx.crackle(head(sideActor(s), 0.72), { n: 3, len: 0.6, colors: ELEC });
+    Fx.sparks(head(sideActor(s), 0.55), { n: 7, speed: 2.4, up: 0.5, g: -3, colors: ELEC, life: 0.3, s: 0.04 });
+    Sfx.play('crackle');
     yield* ANIM_KINDS[move.anim](s, res, move);
     if (res.miss) {
       yield* say(BData.fmt(BData.MSG.miss, { A: st.name }), { auto: true });

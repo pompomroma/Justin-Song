@@ -500,6 +500,12 @@ const Sfx = (() => {
       tone({ f0: 905, f1: 350, dur: 0.5, vol: 0.1, type: 'square' });
     },
     zap:     () => tone({ f0: 1400, f1: 220, dur: 0.14, vol: 0.16, type: 'square' }),
+    thunder: () => { // sharp electric crack + low rumble
+      noise({ f0: 3200, f1: 240, dur: 0.16, vol: 0.3, ftype: 'highpass' });
+      noise({ f0: 420, f1: 60, dur: 0.5, vol: 0.34, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 90, f1: 40, dur: 0.4, vol: 0.16, type: 'sine', delay: 0.04 });
+    },
+    crackle: () => noise({ f0: 2600, f1: 5200, dur: 0.12, vol: 0.1, ftype: 'highpass' }),
     growl:   () => tone({ f0: 360, f1: 110, dur: 0.5, vol: 0.2, type: 'sawtooth' }),
     sizzle:  () => noise({ f0: 2400, f1: 4200, dur: 0.28, vol: 0.12, ftype: 'highpass' }),
     roar:    () => {
@@ -2124,6 +2130,64 @@ const Fx = (() => {
     }
   }
 
+  // ---- electric / lightning effects ----
+  // a jagged lightning bolt from -> to (cubes laid along zig-zag segments,
+  // amplitude tapering to 0 at the endpoints), with optional forks.
+  function bolt(from, to, o) {
+    o = o || {};
+    const segs = o.segs || 8, jitter = o.jitter || 0.5, dense = o.dense || 4;
+    const colors = o.colors || [[1, 1, 1], [0.62, 0.86, 1], [0.82, 0.92, 1]];
+    const life = o.life || 0.14, s = o.s || 0.06;
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs, amp = jitter * Math.sin(u * Math.PI);
+      pts.push([from[0] + (to[0] - from[0]) * u + (rnd() - 0.5) * amp,
+                from[1] + (to[1] - from[1]) * u + (rnd() - 0.5) * amp,
+                from[2] + (to[2] - from[2]) * u + (rnd() - 0.5) * amp]);
+    }
+    for (let i = 0; i < segs; i++) {
+      const a = pts[i], b = pts[i + 1];
+      for (let k = 0; k < dense; k++) {
+        const t = k / dense;
+        spawn({ p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+                c: pick(colors, rnd), v: [0, 0, 0], life: life * (0.7 + rnd() * 0.6), s, s1: 0.008 });
+      }
+    }
+    const forks = o.forks || 0;
+    for (let f = 0; f < forks; f++) {
+      const i = 1 + Math.floor(rnd() * (segs - 1)), a = pts[i], len = o.forkLen || 0.6;
+      const dx = (rnd() - 0.5), dy = (rnd() - 0.5), dz = (rnd() - 0.5);
+      for (let k = 0; k < 4; k++) {
+        const t = k / 4;
+        spawn({ p: [a[0] + dx * len * t, a[1] + dy * len * t, a[2] + dz * len * t],
+                c: pick(colors, rnd), v: [0, 0, 0], life: life * 0.8, s: s * 0.85, s1: 0.006 });
+      }
+    }
+  }
+
+  // a burst of bright fast sparks (tiny cubes flying out under gravity)
+  function sparks(p, o) {
+    o = o || {};
+    const n = o.n || 14, colors = o.colors || [[1, 1, 1], [0.7, 0.9, 1], [0.85, 0.95, 1]];
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, b = (rnd() - 0.5) * Math.PI, sp = (o.speed || 4) * (0.5 + rnd());
+      spawn({ p: [p[0], p[1], p[2]], c: pick(colors, rnd),
+              v: [Math.cos(a) * Math.cos(b) * sp, Math.sin(b) * sp + (o.up || 1), Math.sin(a) * Math.cos(b) * sp],
+              g: o.g !== undefined ? o.g : -7, drag: 1.5, life: (o.life || 0.32) * (0.6 + rnd() * 0.7), s: o.s || 0.045, s1: 0.004 });
+    }
+  }
+
+  // a few short bolts radiating from a point (charge/idle electric crackle)
+  function crackle(p, o) {
+    o = o || {};
+    const n = o.n || 3, len = o.len || 0.6, colors = o.colors || [[1, 1, 1], [0.6, 0.85, 1]];
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, e = (rnd() - 0.5) * 1.2;
+      bolt(p, [p[0] + Math.cos(a) * Math.cos(e) * len, p[1] + Math.sin(e) * len, p[2] + Math.sin(a) * Math.cos(e) * len],
+           { segs: 4, jitter: 0.16, colors, life: 0.12, s: 0.05, dense: 3 });
+    }
+  }
+
   // ------------------------------------------------- time / shake / flash
   let hitstopT = 0;       // seconds remaining, RAW time
   let slowmoT = 0, slowmoScale = 1; // brief fractional time dilation (bullet-time)
@@ -2353,7 +2417,7 @@ const Fx = (() => {
   return {
     update, timeScale, hitstop, slowmo, addTrauma, shake, flash, flashAlpha, flashColor,
     pulseLight, lightState,
-    burst, ring, streak, beam, dissolve, spawn, clear, particleData,
+    burst, ring, streak, beam, dissolve, bolt, sparks, crackle, spawn, clear, particleData,
     transition, transitioning, transitionDraw,
     _state: () => ({ hitstopT, slowmoT, trauma }), // for smoke tests
   };
@@ -2819,9 +2883,18 @@ const Battle = (() => {
   const sideState = (s) => (s === 'P' ? pState : eState);
   const other = (s) => (s === 'P' ? 'E' : 'P');
 
+  const ELEC = [[1, 1, 1], [0.62, 0.86, 1], [0.82, 0.92, 1]]; // electric white-blue
   function applyDamage(st, dmg) {
     st.hp = Math.max(0, st.hp - dmg);
     st.drainRate = Math.max(14, Math.abs(st.displayHp - st.hp) / 0.7);
+    // electric impact — a thunder bolt strikes the target + sparks (every hit,
+    // every monster, normal and boss battles)
+    const a = (st === pState) ? player : enemy;
+    const tp = chest(a);
+    Fx.bolt([tp[0] + (Math.random() - 0.5) * 0.5, tp[1] + 2.8, tp[2] + (Math.random() - 0.5) * 0.5], tp,
+            { segs: 9, jitter: 0.6, colors: ELEC, life: 0.16, s: 0.07, dense: 4, forks: 2, forkLen: 0.7 });
+    Fx.sparks(tp, { n: 16, speed: 4.6, colors: ELEC, up: 1.4, life: 0.34, s: 0.05 });
+    Sfx.play('thunder');
   }
   function applyHeal(st, amount) {
     st.hp = Math.min(st.stats.maxHp, st.hp + amount);
@@ -3604,6 +3677,10 @@ const Battle = (() => {
                      { def: os.stats.def, defStage: 0 }, move, rngBattle)
       : { dmg: 0, crit: false, miss: rngBattle() * 100 >= move.acc };
     yield* say(BData.fmt(BData.MSG.used, { A: st.name, M: move.name }), { auto: true, hold: 320 });
+    // electric wind-up: the attacker crackles with energy as the move begins
+    Fx.crackle(head(sideActor(s), 0.72), { n: 3, len: 0.6, colors: ELEC });
+    Fx.sparks(head(sideActor(s), 0.55), { n: 7, speed: 2.4, up: 0.5, g: -3, colors: ELEC, life: 0.3, s: 0.04 });
+    Sfx.play('crackle');
     yield* ANIM_KINDS[move.anim](s, res, move);
     if (res.miss) {
       yield* say(BData.fmt(BData.MSG.miss, { A: st.name }), { auto: true });

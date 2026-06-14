@@ -223,6 +223,17 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   Fx.clear();
   ok(Fx.particleData().count === 0, 'Fx.clear empties the pool');
 
+  // electric effects spawn particles (lightning bolt + sparks + crackle)
+  Fx.bolt([0, 3, 0], [0, 0, 0], { segs: 8, dense: 4, forks: 2 });
+  ok(Fx.particleData().count >= 32, 'bolt lays cubes along the lightning path');
+  Fx.clear();
+  Fx.sparks([0, 0, 0], { n: 12 });
+  ok(Fx.particleData().count > 0, 'sparks emit');
+  Fx.clear();
+  Fx.crackle([0, 0, 0], { n: 3 });
+  ok(Fx.particleData().count > 0, 'crackle emits short bolts');
+  Fx.clear();
+
   // slow-motion (bullet-time): fractional timescale that releases on raw time
   Fx.slowmo(200, 0.3);
   ok(Math.abs(Fx.timeScale() - 0.3) < 1e-6, 'slow-mo applies a fractional timescale');

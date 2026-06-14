@@ -77,6 +77,12 @@ const Sfx = (() => {
       tone({ f0: 905, f1: 350, dur: 0.5, vol: 0.1, type: 'square' });
     },
     zap:     () => tone({ f0: 1400, f1: 220, dur: 0.14, vol: 0.16, type: 'square' }),
+    thunder: () => { // sharp electric crack + low rumble
+      noise({ f0: 3200, f1: 240, dur: 0.16, vol: 0.3, ftype: 'highpass' });
+      noise({ f0: 420, f1: 60, dur: 0.5, vol: 0.34, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 90, f1: 40, dur: 0.4, vol: 0.16, type: 'sine', delay: 0.04 });
+    },
+    crackle: () => noise({ f0: 2600, f1: 5200, dur: 0.12, vol: 0.1, ftype: 'highpass' }),
     growl:   () => tone({ f0: 360, f1: 110, dur: 0.5, vol: 0.2, type: 'sawtooth' }),
     sizzle:  () => noise({ f0: 2400, f1: 4200, dur: 0.28, vol: 0.12, ftype: 'highpass' }),
     roar:    () => {

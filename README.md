@@ -23,8 +23,11 @@ trigger that same transformation yourself with its **Awaken** move.
 
 Every attack casts **dynamic colored light** into the scene — beams,
 explosions and the boss's void blasts briefly light up the arena, the
-cliff and both monsters in the move's color. The dungeon is lit clearly
-enough to read everything while staying moody and violet.
+cliff and both monsters in the move's color. Every hit also throws a
+**forked lightning bolt + sparks + a thunder crack** (and the attacker
+crackles with electricity on wind-up), for all monsters in normal and
+boss battles. The dungeon is lit clearly enough to read everything while
+staying moody and violet.
 
 Battles are always 1v1, but you command a **party of up to six
 allies**: switch freely mid-battle (a switch uses your turn), and when
