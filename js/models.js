@@ -423,7 +423,7 @@ const Models = (() => {
   function cliff() {
     const g = Vox.grid(26, 28, 26);
     const C = { rock: 0, rock2: 1, crack: 2, top: 3 };
-    const colors = pal('#241d34', '#181226', '#a050e0', '#2e2546');
+    const colors = pal('#3a2e5c', '#2a2046', '#c878ff', '#48386e');
     const r = M3.rng(303);
     for (let y = 0; y < 26; y++) {
       const rad = 12 - y * 0.16 + (r() - 0.5) * 1.1;
@@ -445,7 +445,7 @@ const Models = (() => {
   // obsidian spire — jagged dungeon scatter
   function spire() {
     const g = Vox.grid(10, 20, 10);
-    const colors = pal('#1f1832', '#a050e0');
+    const colors = pal('#352a52', '#c878ff');
     for (let y = 0; y < 20; y++) {
       const rad = 4.2 * (1 - y / 22);
       for (let z = 0; z < 10; z++)
@@ -470,8 +470,8 @@ const Models = (() => {
     const step = 0.5;
     const patches = opts.patches || [];
     const dark = !!opts.dark; // dungeon obsidian floor vs. grove grass
-    const grassA = M3.hex(dark ? '#1c1530' : '#3f6d3a'), grassB = M3.hex(dark ? '#241a3e' : '#487c41'), grassC = M3.hex(dark ? '#140e24' : '#36602f');
-    const dirtA = M3.hex(dark ? '#2a2042' : '#6b5238'), dirtB = M3.hex(dark ? '#352a52' : '#7a5f40');
+    const grassA = M3.hex(dark ? '#2e2450' : '#3f6d3a'), grassB = M3.hex(dark ? '#392c60' : '#487c41'), grassC = M3.hex(dark ? '#241c40' : '#36602f');
+    const dirtA = M3.hex(dark ? '#46386c' : '#6b5238'), dirtB = M3.hex(dark ? '#544284' : '#7a5f40');
     const n = Math.ceil(radius / step);
     const quads = [];
     for (let gz = -n; gz < n; gz++)
@@ -496,7 +496,7 @@ const Models = (() => {
         if (dirt) col = h < 0.5 ? dirtA : dirtB;
         else col = h < 0.18 ? grassC : (h < 0.62 ? grassA : grassB);
         // darken toward the tree wall for mood
-        const vig = 1 - 0.38 * M3.smoothstep((d / radius - 0.55) / 0.45);
+        const vig = 1 - (dark ? 0.18 : 0.38) * M3.smoothstep((d / radius - 0.55) / 0.45);
         const jit = 0.94 + (h % 0.13);
         quads.push([x0, z0, col[0] * vig * jit, col[1] * vig * jit, col[2] * vig * jit]);
       }

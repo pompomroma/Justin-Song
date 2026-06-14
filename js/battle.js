@@ -35,13 +35,15 @@ const Battle = (() => {
     lightCol: [0.74, 0.66, 0.55],
     ambient: [0.42, 0.50, 0.46],
   };
-  // intimidating rift dungeon: near-black sky, cold violet fog + light
+  // intimidating rift dungeon — kept moody/violet but lit clearly enough to
+  // read the boss, cliff and background (raised ambient + light, lighter fog
+  // pushed farther). Attacks pulse extra dynamic light on top of this.
   const DUNGEON_ENV = {
-    sky: M3.hex('#070310'),
-    fog: M3.hex('#1a0a26'), fogNear: 8, fogFar: 28,
-    lightDir: M3.normalize([], [-0.3, -0.7, -0.2]),
-    lightCol: [0.58, 0.42, 0.74],
-    ambient: [0.34, 0.26, 0.46],
+    sky: M3.hex('#120a26'),
+    fog: M3.hex('#2a1846'), fogNear: 12, fogFar: 36,
+    lightDir: M3.normalize([], [-0.3, -0.72, -0.2]),
+    lightCol: [0.92, 0.74, 1.05],
+    ambient: [0.54, 0.46, 0.66],
   };
 
   const SPAWN_THEMES = {
@@ -397,6 +399,7 @@ const Battle = (() => {
       Fx.hitstop(100);
       Fx.slowmo(260, 0.42);               // brief bullet-time on contact
       Fx.flash(80, 0.85, tint);
+      Fx.pulseLight(chest(v), tint, 2.4, 220, 5.5);
       Fx.addTrauma(0.62);
       Cam.kickFov(7, 170);
       v.flashT = 0.32;
@@ -428,6 +431,7 @@ const Battle = (() => {
     Fx.addTrauma(0.32);
     Cam.kickFov(-3, 380);
     Fx.flash(70, 0.32, [0.72, 0.52, 0.88]);
+    Fx.pulseLight(head(u, 0.6), [0.78, 0.5, 1], 1.8, 420, 5);
     // concentric sound-wave shockwaves sweeping out from the head
     for (let i = 0; i < 4; i++) {
       Fx.ring(head(u, 0.6), { r0: 0.15, r1: 1.2, n: 16, life: 0.46,
@@ -482,6 +486,7 @@ const Battle = (() => {
       Fx.hitstop(85);
       Fx.slowmo(300, 0.4);
       Fx.flash(75, 0.8, tint);
+      Fx.pulseLight(tgt, tint, 3.0, 260, 7);
       Fx.addTrauma(0.5);
       v.flashT = 0.34;
       Fx.burst(chest(v), { n: 32, speed: 3.2, colors: fx, life: 0.55, g: -3 });
@@ -531,6 +536,7 @@ const Battle = (() => {
       Fx.hitstop(130);
       Fx.slowmo(460, 0.3);                  // grand bullet-time bloom
       Fx.flash(110, 1.0, tint);
+      Fx.pulseLight(tgt, tint, 3.4, 280, 8);
       Fx.addTrauma(0.82);
       Cam.kickFov(10, 200);
       v.flashT = 0.42;
@@ -599,6 +605,7 @@ const Battle = (() => {
       Fx.hitstop(85);
       Fx.slowmo(280, 0.4);
       Fx.flash(70, 0.7, tint);
+      Fx.pulseLight(tgt, tint, 2.6, 240, 6);
       Fx.addTrauma(0.5);
       v.flashT = 0.3;
       Fx.burst(tgt, { n: 30, speed: 3.0, colors: fx, life: 0.55, g: -3 });
@@ -711,6 +718,7 @@ const Battle = (() => {
       Fx.hitstop(120);
       Fx.slowmo(440, 0.32);                 // bullet-time bloom after the freeze
       Fx.flash(130, 1.0, [1, 0.82, 0.5]);   // warm fire-tinted screen flash
+      Fx.pulseLight(tgt, [1, 0.74, 0.4], 3.2, 300, 8);
       Fx.addTrauma(0.82);
       Cam.kickFov(10, 220);
       v.flashT = 0.45;
@@ -807,6 +815,7 @@ const Battle = (() => {
       Sfx.play('boom'); Sfx.play('quake');
       Fx.hitstop(140); Fx.slowmo(480, 0.3);
       Fx.flash(120, 1.0, tint); Fx.addTrauma(0.8); Cam.kickFov(10, 220);
+      Fx.pulseLight(tgt, tint, 3.6, 300, 9);
       v.flashT = 0.45;
       Fx.burst(tgt, { n: 60, speed: 4.2, colors: fx, life: 0.7, g: -3 });
       Fx.ring(tgt, { r0: 0.2, r1: 2.2, n: 26, life: 0.52, colors: [tint, fx[0]], s: 0.09 });
@@ -879,6 +888,7 @@ const Battle = (() => {
       Sfx.play('boom'); Sfx.play('quake');
       Fx.hitstop(160); Fx.slowmo(560, 0.28);
       Fx.flash(140, 1.0, tint); Fx.addTrauma(0.95); Cam.kickFov(13, 240);
+      Fx.pulseLight(tgt, tint, 4.0, 320, 10);
       Fx.burst(tgt, { n: 64, speed: 4.8, colors: fx, life: 0.8, g: -3.2 });
       Fx.ring([v.pos[0], v.pos[1] + 0.1, v.pos[2]], { r0: 0.3, r1: 2.8, n: 30, life: 0.6, colors: [tint, fx[0]], s: 0.1 });
       Fx.ring([v.pos[0], v.pos[1] + 0.4, v.pos[2]], { r0: 0.2, r1: 1.8, n: 18, life: 0.5, colors: [[1, 1, 1]], s: 0.07 });
@@ -1029,6 +1039,7 @@ const Battle = (() => {
     // eruption — void pillar engulfs it, screen flash, hard hitstop
     Sfx.play('boom'); Sfx.play('quake');
     Fx.hitstop(170); Fx.flash(170, 1.0, MAG); Fx.addTrauma(0.95); Cam.kickFov(13, 320);
+    Fx.pulseLight(chest(a), MAG, 4.5, 360, 11);
     for (let i = 0; i < 44; i++) {
       const ang = Math.random() * Math.PI * 2, rr = Math.random() * 0.7;
       Fx.spawn({ p: [a.pos[0] + Math.cos(ang) * rr, a.pos[1] + 0.1, a.pos[2] + Math.sin(ang) * rr], c: [VIO, MAG, W, DK][i % 4],
@@ -1040,6 +1051,7 @@ const Battle = (() => {
     const oldName = transformForm(side);
     Sfx.play('spawn'); Sfx.play('roar');
     Fx.flash(190, 1.0, W); Fx.slowmo(800, 0.32);
+    Fx.pulseLight([a.pos[0], a.pos[1] + a.height * 0.5, a.pos[2]], MAG, 4.2, 700, 12);
     a.visible = true;
     a.scl = [0.35, 0.35, 0.35];
     tw3(a.scl, [1, 1, 1], 760, 'outElastic');
@@ -1773,6 +1785,7 @@ const Battle = (() => {
         const acting = state === 'TURN';
         riftT = (acting ? 0.9 : 2.4) + Math.random() * (acting ? 1.0 : 3);
         Fx.flash(110, acting ? 0.28 : 0.22, [0.6, 0.3, 0.95]);
+        Fx.pulseLight([BOSS_POS[0], BOSS_POS[1] + 1.6, BOSS_POS[2]], [0.66, 0.42, 1], acting ? 1.8 : 1.3, 240, 9);
         Fx.addTrauma(acting ? 0.14 : 0.1);
         Fx.burst([BOSS_POS[0], BOSS_POS[1] + 1.5, BOSS_POS[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
       }
@@ -1785,6 +1798,7 @@ const Battle = (() => {
 
   function render3d(aspect) {
     const { view, proj } = Cam.matrices(aspect);
+    curEnv.point = Fx.lightState(); // attacks pulse a colored light into the arena
     Gfx.begin(view, proj, curEnv);
     Gfx.draw(curStatic, null, {});
     if (enemy.visible) Gfx.draw(enemy.h, actorMat(enemy), { flash: enemy.flashT > 0 ? M3.clamp(enemy.flashT / 0.25, 0, 1) : 0 });

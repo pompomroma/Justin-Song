@@ -21,6 +21,11 @@ animation. Its attacks are the flashiest of any monster. Weaken and
 capture it with a Voxball and it joins your party; as your ally you can
 trigger that same transformation yourself with its **Awaken** move.
 
+Every attack casts **dynamic colored light** into the scene — beams,
+explosions and the boss's void blasts briefly light up the arena, the
+cliff and both monsters in the move's color. The dungeon is lit clearly
+enough to read everything while staying moody and violet.
+
 Battles are always 1v1, but you command a **party of up to six
 allies**: switch freely mid-battle (a switch uses your turn), and when
 an ally faints you pick the next one to send in. The command menu has

@@ -239,6 +239,16 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   ok(fc[0] === 1 && Math.abs(fc[1] - 0.5) < 1e-6 && Fx.flashAlpha() > 0, 'flash carries a tint color');
   Fx.flash(80, 1);
   ok(Fx.flashColor()[0] === 1 && Fx.flashColor()[1] === 1, 'flash defaults to white');
+
+  // dynamic scene light (attacks pulse this into the renderer)
+  Fx.clear();
+  ok(Fx.lightState() === null, 'no scene light by default');
+  Fx.pulseLight([1, 2, 3], [1, 0.5, 0.2], 3, 200, 7);
+  const ls = Fx.lightState();
+  ok(ls && ls.pos[0] === 1 && ls.rad === 7 && ls.intensity > 0 && ls.color[0] === 1, 'pulseLight sets a decaying colored light');
+  let s3 = 0;
+  while (Fx.lightState() && s3 < 60) { Fx.update(1 / 60); s3++; }
+  ok(Fx.lightState() === null && s3 <= 14, 'scene light decays and releases (' + s3 + ' frames)');
   Fx.clear();
 }
 

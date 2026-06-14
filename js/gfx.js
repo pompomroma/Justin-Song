@@ -12,7 +12,8 @@ attribute vec3 aNrm;
 attribute vec3 aCol;
 uniform mat4 uModel, uView, uProj;
 uniform vec3 uLightDir, uLightCol, uAmbient, uTint;
-uniform float uFlash, uUnlit;
+uniform vec3 uPointPos, uPointCol;
+uniform float uFlash, uUnlit, uPointInt, uPointRad;
 varying vec3 vCol;
 varying float vDist;
 void main() {
@@ -21,7 +22,11 @@ void main() {
   gl_Position = uProj * vp;
   vec3 n = normalize((uModel * vec4(aNrm, 0.0)).xyz);
   float lam = max(dot(n, -uLightDir), 0.0);
-  vec3 lit = aCol * (uAmbient + uLightCol * lam);
+  // dynamic point light (attacks/effects pulse this into the scene)
+  vec3 toL = uPointPos - wp.xyz;
+  float att = max(0.0, 1.0 - length(toL) / uPointRad);
+  float plam = max(dot(n, normalize(toL)), 0.0) * att * att * uPointInt;
+  vec3 lit = aCol * (uAmbient + uLightCol * lam + uPointCol * plam);
   vec3 c = mix(lit, aCol, uUnlit);
   vCol = mix(c, vec3(1.0), uFlash) * uTint;
   vDist = length(vp.xyz);
@@ -63,7 +68,8 @@ void main() {
       throw new Error('link: ' + gl.getProgramInfoLog(prog));
     gl.useProgram(prog);
     for (const u of ['uModel', 'uView', 'uProj', 'uLightDir', 'uLightCol', 'uAmbient',
-                     'uTint', 'uFlash', 'uUnlit', 'uFogCol', 'uFogNear', 'uFogFar', 'uAlpha'])
+                     'uTint', 'uFlash', 'uUnlit', 'uFogCol', 'uFogNear', 'uFogFar', 'uAlpha',
+                     'uPointPos', 'uPointCol', 'uPointInt', 'uPointRad'])
       U[u] = gl.getUniformLocation(prog, u);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -107,6 +113,11 @@ void main() {
     gl.uniform3fv(U.uFogCol, env.fog);
     gl.uniform1f(U.uFogNear, env.fogNear);
     gl.uniform1f(U.uFogFar, env.fogFar);
+    const pt = env.point; // dynamic point light (null/absent = off)
+    gl.uniform3fv(U.uPointPos, pt ? pt.pos : [0, 1000, 0]);
+    gl.uniform3fv(U.uPointCol, pt ? pt.color : [0, 0, 0]);
+    gl.uniform1f(U.uPointInt, pt ? pt.intensity : 0);
+    gl.uniform1f(U.uPointRad, pt && pt.rad ? pt.rad : 1);
   }
 
   function draw(handle, model, opts) {

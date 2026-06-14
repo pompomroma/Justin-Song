@@ -114,6 +114,19 @@ const Fx = (() => {
   const flashAlpha = () => (flashT > 0 && flashDur > 0 ? (flashT / flashDur) * flashPeak : 0);
   const flashColor = () => flashCol;
 
+  // dynamic scene point light — attacks pulse a colored light into the world
+  // (the renderer lights all geometry by it); decays on scaled time.
+  let lightT = 0, lightDur = 0, lightPos = [0, 1000, 0], lightCol = [0, 0, 0], lightI0 = 0, lightRad = 6;
+  const pulseLight = (pos, color, intensity, ms, radius) => {
+    lightPos = [pos[0], pos[1], pos[2]];
+    lightCol = color || [1, 1, 1];
+    lightI0 = intensity === undefined ? 2 : intensity;
+    lightDur = ms / 1000; lightT = lightDur; lightRad = radius || 6;
+  };
+  const lightState = () => (lightT > 0 && lightDur > 0
+    ? { pos: lightPos, color: lightCol, intensity: lightI0 * (lightT / lightDur), rad: lightRad }
+    : null);
+
   function shake() {
     const amp = trauma * trauma;
     const t = shakeTime;
@@ -238,6 +251,7 @@ const Fx = (() => {
     const dt = rawDt * timeScale();
     trauma = Math.max(0, trauma - 1.4 * dt);
     if (flashT > 0) flashT -= dt;
+    if (lightT > 0) lightT -= dt;
     for (let i = beams.length - 1; i >= 0; i--) {
       const b = beams[i];
       b.t += dt;
@@ -304,10 +318,11 @@ const Fx = (() => {
     return { data: buffer, count: o / 9 };
   }
 
-  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; hitstopT = 0; slowmoT = 0; };
+  const clear = () => { for (const p of pool) p.on = false; beams.length = 0; trauma = 0; flashT = 0; hitstopT = 0; slowmoT = 0; lightT = 0; };
 
   return {
     update, timeScale, hitstop, slowmo, addTrauma, shake, flash, flashAlpha, flashColor,
+    pulseLight, lightState,
     burst, ring, streak, beam, dissolve, spawn, clear, particleData,
     transition, transitioning, transitionDraw,
     _state: () => ({ hitstopT, slowmoT, trauma }), // for smoke tests
