@@ -124,6 +124,12 @@ const press = (sb, code) => {
   sb.__dispatch('keyup', { code });
 };
 
+// dispatch a touch at a virtual (960x540) point, mapped to client coords via
+// the stub's 1280x720 window over a 960x540 stage rect.
+const touchEv = (sb, type, vx, vy, id) => {
+  sb.__dispatch(type, { changedTouches: [{ identifier: id || 1, clientX: vx / 960 * 1280, clientY: vy / 540 * 720 }] });
+};
+
 // drives one "menu step": navigate toward bottom-right (Attack/strongest
 // move) and confirm. Down/Right SET grid position (no toggling), so this
 // lands Attack in the top menu, the 4th move in the move grid, advances
@@ -235,6 +241,14 @@ function attackCycle(sb) {
   const sb = makeSandbox('#battle');
   vm.runInContext(`(${function () {
     BData.captureChance = () => 1; // guaranteed catch
+    // enemy barely scratches so the player never faints and the menu nav
+    // stays in sync through the whole heal/switch/capture tour
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => {
+      const r = realDmg(att, def, move, rng);
+      if (!r.miss && move.power && att.level >= 13) r.dmg = 1;
+      return r;
+    };
     const orig = Game.onBattleEnd;
     Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
   }.toString()})()`, sb);
@@ -253,7 +267,7 @@ function attackCycle(sb) {
   // can only land on the top row (Items/Capture) — never on Run.
   phase(['KeyC', 'ArrowUp', 'Space'], 4000);        // party panel -> switch allies
   ok(sb.__errors.length === 0, 'voluntary switch sequence without errors');
-  phase(['ArrowUp', 'ArrowRight', 'Space'], 12000); // Capture (rigged success)
+  phase(['KeyX', 'ArrowUp', 'ArrowRight', 'Space'], 12000); // back to top, then Capture (rigged)
   const ended = vm.runInContext('globalThis.__battleEnd', sb);
   const party = vm.runInContext('__Game.save.party.map(m => m.species).join(",")', sb);
   ok(ended === 'capture' && /MAGMULE$/.test(party),
@@ -317,6 +331,34 @@ function attackCycle(sb) {
      'dungeon boss defeated through the transform climax (' + ended + ', bossBeaten=' + bossBeaten + ', ' + frames + ' frames)');
   sb.__pump(250);
   ok(sb.__errors.length === 0, 'no errors through the boss battle + transformation' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ----------------------------------- run 9: mobile / touch controls
+{
+  const sb = makeSandbox('');
+  sb.__pump(5);
+  ok(vm.runInContext('Input.usingTouch()', sb) === false, 'mobile controls hidden before any touch');
+  // D-pad down (overworld layout)
+  touchEv(sb, 'touchstart', 140, 468, 1);
+  ok(vm.runInContext('Input.usingTouch()', sb) === true, 'first touch reveals the mobile controls');
+  ok(vm.runInContext('Input.axisY()', sb) === 1, 'D-pad drives the movement axis');
+  sb.__pump(60); // walk a bit (also exercises drawTouch every frame)
+  touchEv(sb, 'touchend', 140, 468, 1);
+  ok(vm.runInContext('Input.axisY()', sb) === 0, 'releasing the D-pad stops movement');
+  // A button -> confirm edge
+  touchEv(sb, 'touchstart', 884, 300, 2);
+  ok(vm.runInContext('Input.pressed("confirm")', sb) === true, 'A button fires confirm');
+  touchEv(sb, 'touchend', 884, 300, 2);
+  // a tap elsewhere routes into the mouse (so battle tap-to-select works)
+  touchEv(sb, 'touchstart', 480, 250, 3);
+  ok(vm.runInContext('Input.mouse.clicked', sb) === true, 'a screen tap routes into the mouse (tap-to-select)');
+  touchEv(sb, 'touchend', 480, 250, 3);
+  // using the keyboard hides the overlay again
+  press(sb, 'KeyW');
+  ok(vm.runInContext('Input.usingTouch()', sb) === false, 'using the keyboard hides the mobile controls');
+  sb.__pump(30);
+  ok(sb.__errors.length === 0, 'no errors through touch input + overlay draw' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 

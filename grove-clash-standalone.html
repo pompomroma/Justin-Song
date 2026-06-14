@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Grove Clash — Voxel Monster Battle Prototype</title>
 <style>
 /* Grove Clash — stylesheet. Two canvases (the WebGL world + the 2D UI)
@@ -15,6 +15,11 @@ html, body {
   height: 100%;
   background: #000;
   overflow: hidden;
+  /* the game owns all touch input — no native scroll/zoom/select/highlight */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -33,6 +38,7 @@ body {
   top: 0;
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 #ui {
@@ -205,8 +211,15 @@ const M3 = (() => {
 </script>
 <script>
 /* Grove Clash — js/input.js
-   Input: keyboard state with per-tick pressed edges, plus minimal mouse
-   support (position/click mapped into the 960x540 virtual UI space).
+   Input: keyboard state with per-tick pressed edges, mouse support, and
+   on-screen TOUCH controls. Touch feeds the same held/pressed/mouse state
+   the rest of the game already reads, so nothing downstream changes.
+
+   Mobile controls are modality-gated: they appear only when the player is
+   NOT using the keyboard — revealed on the first touch, hidden the moment a
+   key is pressed. Overworld shows an 8-way D-pad (left) + A/B buttons
+   (right); battle menus are tap-to-select (taps route into the mouse state)
+   with A=confirm/advance and B=back also available.
    No top-level side effects; main.js calls Input.init(). */
 const Input = (() => {
 
@@ -227,14 +240,86 @@ const Input = (() => {
   };
   const PREVENT = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Backspace'];
 
-  const held = {};      // action -> bool
+  const held = {};       // action -> bool
   const pressedNow = {}; // action -> bool (edge, cleared each tick)
   const mouse = { x: -1, y: -1, inside: false, clicked: false };
   let mapper = null;     // fn(clientX, clientY) -> {x,y} in UI space or null
   let firstCb = null, firstDone = false;
 
+  // ---- touch / on-screen controls (virtual 960x540 coords) ----
+  const DPAD = [140, 408], DPAD_R = 96, DEAD = 18;
+  const ABTN = [884, 300], A_R = 46;
+  const BBTN = [884, 398], B_R = 40;
+  let touchActive = false;            // true once a touch occurs, false on keydown
+  let touchLayout = 'overworld';      // 'overworld' (D-pad+A/B) | 'battle' (A/B, tap)
+  const activeTouches = {};           // identifier -> { role }
+  const dpadDir = { up: false, down: false, left: false, right: false };
+
   function fireFirst() {
     if (!firstDone) { firstDone = true; if (firstCb) firstCb(); }
+  }
+
+  const dist2 = (p, c) => Math.hypot(p.x - c[0], p.y - c[1]);
+
+  function applyDpad(p) {
+    const dx = p.x - DPAD[0], dy = p.y - DPAD[1];
+    const nd = { up: dy < -DEAD, down: dy > DEAD, left: dx < -DEAD, right: dx > DEAD };
+    for (const d of ['up', 'down', 'left', 'right']) {
+      if (nd[d] && !dpadDir[d]) pressedNow[d] = true; // edge for menu/viewer nav
+      dpadDir[d] = nd[d];
+      held[d] = nd[d];
+    }
+  }
+  function clearDpad() {
+    for (const d of ['up', 'down', 'left', 'right']) { dpadDir[d] = false; held[d] = false; }
+  }
+  function setMouse(p, clicked) {
+    mouse.x = p.x; mouse.y = p.y; mouse.inside = true;
+    if (clicked) mouse.clicked = true;
+  }
+
+  function onTouchStart(e) {
+    if (e.preventDefault) e.preventDefault();
+    touchActive = true;
+    fireFirst();
+    const list = e.changedTouches || [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const p = mapper ? mapper(t.clientX, t.clientY) : null;
+      if (!p) { activeTouches[t.identifier] = { role: 'none' }; continue; }
+      let role = 'tap';
+      if (touchLayout === 'overworld' && dist2(p, DPAD) <= DPAD_R) { role = 'dpad'; applyDpad(p); }
+      else if (dist2(p, ABTN) <= A_R) { role = 'A'; held.confirm = true; pressedNow.confirm = true; }
+      else if (dist2(p, BBTN) <= B_R) { role = 'B'; held.back = true; pressedNow.back = true; }
+      else { setMouse(p, true); }
+      activeTouches[t.identifier] = { role };
+    }
+  }
+  function onTouchMove(e) {
+    if (e.preventDefault) e.preventDefault();
+    const list = e.changedTouches || [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const r = activeTouches[t.identifier];
+      if (!r) continue;
+      const p = mapper ? mapper(t.clientX, t.clientY) : null;
+      if (!p) continue;
+      if (r.role === 'dpad') applyDpad(p);
+      else if (r.role === 'tap') setMouse(p, false);
+    }
+  }
+  function onTouchEnd(e) {
+    if (e.preventDefault) e.preventDefault();
+    const list = e.changedTouches || [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const r = activeTouches[t.identifier];
+      if (!r) continue;
+      if (r.role === 'dpad') clearDpad();
+      else if (r.role === 'A') held.confirm = false;
+      else if (r.role === 'B') held.back = false;
+      delete activeTouches[t.identifier];
+    }
   }
 
   function init(opts) {
@@ -243,6 +328,7 @@ const Input = (() => {
 
     window.addEventListener('keydown', (e) => {
       if (PREVENT.indexOf(e.code) >= 0) e.preventDefault();
+      touchActive = false; // keyboard in use -> hide the mobile overlay
       fireFirst();
       const a = ACTIONS[e.code];
       if (!a) return;
@@ -255,6 +341,7 @@ const Input = (() => {
     });
     window.addEventListener('blur', () => {
       for (const k in held) held[k] = false;
+      clearDpad();
     });
     window.addEventListener('mousemove', (e) => {
       const p = mapper ? mapper(e.clientX, e.clientY) : null;
@@ -266,6 +353,53 @@ const Input = (() => {
       const p = mapper ? mapper(e.clientX, e.clientY) : null;
       if (p) { mouse.x = p.x; mouse.y = p.y; mouse.inside = true; mouse.clicked = true; }
     });
+    window.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: false });
+    window.addEventListener('touchcancel', onTouchEnd, { passive: false });
+  }
+
+  // ---- on-screen overlay (only when not using the keyboard) ----
+  function circle(ctx, cx, cy, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = stroke; ctx.stroke();
+  }
+  function arrow(ctx, cx, cy, dir, on) {
+    const s = 13;
+    ctx.beginPath();
+    if (dir === 'up') { ctx.moveTo(cx, cy - s); ctx.lineTo(cx - s, cy + s * 0.6); ctx.lineTo(cx + s, cy + s * 0.6); }
+    else if (dir === 'down') { ctx.moveTo(cx, cy + s); ctx.lineTo(cx - s, cy - s * 0.6); ctx.lineTo(cx + s, cy - s * 0.6); }
+    else if (dir === 'left') { ctx.moveTo(cx - s, cy); ctx.lineTo(cx + s * 0.6, cy - s); ctx.lineTo(cx + s * 0.6, cy + s); }
+    else { ctx.moveTo(cx + s, cy); ctx.lineTo(cx - s * 0.6, cy - s); ctx.lineTo(cx - s * 0.6, cy + s); }
+    ctx.closePath();
+    ctx.fillStyle = on ? 'rgba(255,255,255,0.95)' : 'rgba(232,238,248,0.5)';
+    ctx.fill();
+  }
+  function btn(ctx, c, r, label, on, hue) {
+    circle(ctx, c[0], c[1], r, on ? hue.on : hue.off, 'rgba(245,248,255,0.7)');
+    PFont.drawC(ctx, label, c[0], c[1] - 9, { scale: 3, color: '#ffffff', outline: 'rgba(0,0,0,0.5)' });
+  }
+
+  function drawTouch(ctx) {
+    if (!touchActive) return;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    if (touchLayout === 'overworld') {
+      circle(ctx, DPAD[0], DPAD[1], DPAD_R, 'rgba(18,22,30,0.34)', 'rgba(232,238,248,0.5)');
+      arrow(ctx, DPAD[0], DPAD[1] - DPAD_R * 0.58, 'up', dpadDir.up);
+      arrow(ctx, DPAD[0], DPAD[1] + DPAD_R * 0.58, 'down', dpadDir.down);
+      arrow(ctx, DPAD[0] - DPAD_R * 0.58, DPAD[1], 'left', dpadDir.left);
+      arrow(ctx, DPAD[0] + DPAD_R * 0.58, DPAD[1], 'right', dpadDir.right);
+      const hx = (dpadDir.right ? 1 : 0) - (dpadDir.left ? 1 : 0);
+      const hy = (dpadDir.down ? 1 : 0) - (dpadDir.up ? 1 : 0);
+      circle(ctx, DPAD[0] + hx * DPAD_R * 0.42, DPAD[1] + hy * DPAD_R * 0.42, 34,
+             'rgba(70,80,98,0.6)', 'rgba(245,248,255,0.8)');
+    }
+    btn(ctx, ABTN, A_R, 'A', !!held.confirm, { on: 'rgba(86,168,96,0.78)', off: 'rgba(34,54,38,0.46)' });
+    btn(ctx, BBTN, B_R, 'B', !!held.back, { on: 'rgba(176,82,72,0.78)', off: 'rgba(56,38,36,0.46)' });
+    ctx.restore();
   }
 
   return {
@@ -273,9 +407,11 @@ const Input = (() => {
     held: (a) => !!held[a],
     pressed: (a) => !!pressedNow[a],
     mouse,
-    // axis helpers for movement (-1..1)
     axisX: () => (held.right ? 1 : 0) - (held.left ? 1 : 0),
     axisY: () => (held.down ? 1 : 0) - (held.up ? 1 : 0),
+    setTouchLayout: (l) => { touchLayout = l; },
+    usingTouch: () => touchActive,
+    drawTouch,
     // call at the end of every fixed update tick
     postUpdate: () => {
       for (const k in pressedNow) pressedNow[k] = false;
@@ -4872,6 +5008,7 @@ const Game = (() => {
   // ---------------------------------------------------------------- loop
   function update(dt) {
     Fx.update(dt);
+    Input.setTouchLayout(scene === Battle ? 'battle' : 'overworld');
     if (Input.pressed('mute')) Sfx.toggleMute();
     if (Input.pressed('stats')) showStats = !showStats;
     if (scene && scene.update) scene.update(dt);
@@ -4898,6 +5035,7 @@ const Game = (() => {
     if (Sfx.isMuted())
       PFont.draw(ctx, 'MUTED', 884, 8, { scale: 2, color: '#f8c838' });
     drawHud();
+    Input.drawTouch(ctx);
     drawErrorOverlay();
   }
 

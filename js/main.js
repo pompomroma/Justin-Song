@@ -218,6 +218,7 @@ const Game = (() => {
   // ---------------------------------------------------------------- loop
   function update(dt) {
     Fx.update(dt);
+    Input.setTouchLayout(scene === Battle ? 'battle' : 'overworld');
     if (Input.pressed('mute')) Sfx.toggleMute();
     if (Input.pressed('stats')) showStats = !showStats;
     if (scene && scene.update) scene.update(dt);
@@ -244,6 +245,7 @@ const Game = (() => {
     if (Sfx.isMuted())
       PFont.draw(ctx, 'MUTED', 884, 8, { scale: 2, color: '#f8c838' });
     drawHud();
+    Input.drawTouch(ctx);
     drawErrorOverlay();
   }
 

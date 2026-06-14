@@ -86,6 +86,13 @@ modules, no fetch).
 | T | Toggle the FPS / resolution readout |
 | Mouse | Click buttons/party rows, click to advance text |
 
+**Mobile / touch:** on-screen controls appear automatically **only when you
+are not using the keyboard** — they show up the first time you touch the
+screen and hide the instant you press a key. In the overworld you get an
+8-way D-pad (lower-left) plus **A** (talk / confirm) and **B** (back) buttons
+(right edge). In battle, just tap the move buttons, party balls, menu options
+and tap to advance text; **A**/**B** are there too.
+
 Lose and you black out (party fully healed); win, run, or capture and
 REX will want a rematch. PIXLIT starts its first fight at 17/28 HP —
 lean on your bench.
