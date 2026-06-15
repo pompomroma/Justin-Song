@@ -362,5 +362,18 @@ function attackCycle(sb) {
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
+// ------------------------------ run 10: battle insets the 3D inner screen
+{
+  const sb = makeSandbox(''); // overworld
+  sb.__pump(5);
+  const w0 = vm.runInContext('document.getElementById("gl").style.width', sb);
+  ok(w0 !== '82%', 'overworld 3D view is not inset (' + w0 + ')');
+  vm.runInContext('__Game.toBattle()', sb); // overworld -> battle transition
+  sb.__pump(300);                            // ride transition; switchNow insets the gl canvas
+  const w1 = vm.runInContext('document.getElementById("gl").style.width', sb);
+  ok(w1 === '82%', 'battle insets the 3D inner screen so the frame borders it (' + w1 + ')');
+  ok(sb.__errors.length === 0, 'no errors through the inset toggle');
+}
+
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');
 process.exit(failures ? 1 : 0);

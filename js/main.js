@@ -56,9 +56,28 @@ const Game = (() => {
   }
 
   // ------------------------------------------------------------ scenes
+  // In battle the 3D "inner screen" is inset so the red frame borders the
+  // monsters instead of overlapping them (the top bar in particular clipped
+  // the tall cliff-top boss). Kept 16:9 so the camera/scene are unchanged.
+  const BATTLE_INSET = 0.09; // fraction of the stage inset on every side
+  let glInset = false;
+  function applyGlInset(on) {
+    if (on === glInset || !glCanvas) return;
+    glInset = on;
+    if (on) {
+      const m = (BATTLE_INSET * 100) + '%', sz = ((1 - 2 * BATTLE_INSET) * 100) + '%';
+      glCanvas.style.left = m; glCanvas.style.top = m;
+      glCanvas.style.width = sz; glCanvas.style.height = sz;
+    } else {
+      glCanvas.style.left = '0'; glCanvas.style.top = '0';
+      glCanvas.style.width = '100%'; glCanvas.style.height = '100%';
+    }
+  }
+
   function switchNow(name, params) {
     if (scene && scene.exit) scene.exit();
     scene = name === 'battle' ? Battle : Overworld;
+    applyGlInset(name === 'battle');
     scene.enter(params || {});
   }
 
@@ -312,6 +331,7 @@ const Game = (() => {
     else if (hash.indexOf('dungeon') >= 0) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
     else if (hash.indexOf('battle') >= 0) { scene = Battle; scene.enter({}); }
     else { scene = Overworld; scene.enter({}); }
+    applyGlInset(scene === Battle);
 
     requestAnimationFrame((now) => { last = now; requestAnimationFrame(loop); });
   }
