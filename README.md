@@ -44,6 +44,12 @@ fully heals your party afterward**.
 party equally**, and crossing the threshold **levels monsters up** (HP
 and stats grow). The bar under your active ally shows its progress.
 
+**Sound & music:** every attack has its **own cinematic, layered sound**
+(Psyblast, Cinder, Void Lance, etc. are all distinct), and a **majestic
+procedural soundtrack** plays through battles — a heroic theme in normal
+fights and a darker, driving theme in the boss raid. All of it is
+synthesized in code (no audio files); press **M** to mute.
+
 ## Run it
 
 ### On Replit

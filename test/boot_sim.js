@@ -154,6 +154,10 @@ function attackCycle(sb) {
   }.toString()})()`, sb);
   sb.__pump(60);
   ok(sb.__errors.length === 0, 'battle boots without errors');
+  ok(vm.runInContext('typeof Sfx.move === "function" && typeof Sfx.startMusic === "function" && typeof Sfx.stopMusic === "function"', sb),
+     'audio exposes per-move SFX + battle music API');
+  ok(vm.runInContext('(function(){ Sfx.move("PSYBLAST"); Sfx.startMusic("battle"); Sfx.stopMusic(); return true; })()', sb),
+     'attack SFX + music calls are safe with no audio context');
   const glw = vm.runInContext('document.getElementById("gl").width', sb);
   ok(glw > 480, 'adaptive resolution scaled the 3D buffer up (' + glw + 'px wide)');
   // play: keep attacking (with forced switches) for up to ~11 sim-minutes

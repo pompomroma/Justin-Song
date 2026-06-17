@@ -950,6 +950,7 @@ const Battle = (() => {
                      { def: os.stats.def, defStage: 0 }, move, rngBattle)
       : { dmg: 0, crit: false, miss: rngBattle() * 100 >= move.acc };
     yield* say(BData.fmt(BData.MSG.used, { A: st.name, M: move.name }), { auto: true, hold: 320 });
+    Sfx.move(move.id); // each attack's unique cinematic signature sound
     // electric wind-up: the attacker crackles with energy as the move begins
     Fx.crackle(head(sideActor(s), 0.72), { n: 3, len: 0.6, colors: ELEC });
     Fx.sparks(head(sideActor(s), 0.55), { n: 7, speed: 2.4, up: 0.5, g: -3, colors: ELEC, life: 0.3, s: 0.04 });
@@ -1666,6 +1667,7 @@ const Battle = (() => {
     awaitParty = false; pickedAlly = -1; awaitOptional = false;
     awaitAsk = false; askChoice = -1; askCursor = 1;
     ball.visible = false; ball.flight = null;
+    Sfx.startMusic(arena === 'dungeon' ? 'boss' : 'battle'); // majestic battle BGM
 
     if (params.fly) {
       state = 'FLY';
@@ -1976,7 +1978,7 @@ const Battle = (() => {
     }
   }
 
-  function exit() { Fx.clear(); Cam.idleDrift(false); }
+  function exit() { Fx.clear(); Cam.idleDrift(false); Sfx.stopMusic(); }
 
   return { enter, update, render3d, renderUi, exit };
 })();

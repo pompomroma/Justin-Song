@@ -5,6 +5,8 @@
 const Sfx = (() => {
   let ctx = null, master = null, noiseBuf = null;
   let muted = false, ambTimer = null;
+  let musicGain = null, pendingTrack = null;
+  const music = { on: false, track: null, step: 0, nextTime: 0, timer: null };
 
   function unlock() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -14,12 +16,16 @@ const Sfx = (() => {
     master = ctx.createGain();
     master.gain.value = muted ? 0 : 0.45;
     master.connect(ctx.destination);
+    musicGain = ctx.createGain();      // battle music sits under the SFX
+    musicGain.gain.value = 0.42;
+    musicGain.connect(master);
     // 1 second of white noise, reused by every noise-based effect
     const n = ctx.sampleRate;
     noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
     startAmbience();
+    if (pendingTrack) startMusic(pendingTrack); // a battle was waiting on audio
   }
 
   // ---- tiny synth helpers ----
@@ -124,6 +130,23 @@ const Sfx = (() => {
     step:    () => noise({ f0: 700, f1: 250, dur: 0.05, vol: 0.04 }),
   };
 
+  // ---- unique, cinematic signature per attack (layered on the move's FX) ----
+  const MOVEFX = {
+    TACKLE: () => { tone({ f0: 160, f1: 360, dur: 0.13, vol: 0.16, type: 'sawtooth' }); noise({ f0: 600, f1: 2200, dur: 0.16, vol: 0.18, ftype: 'bandpass', q: 1 }); },
+    GROWL: () => { tone({ f0: 300, f1: 90, dur: 0.55, vol: 0.2, type: 'sawtooth' }); tone({ f0: 150, f1: 58, dur: 0.55, vol: 0.14, type: 'square', delay: 0.03 }); noise({ f0: 520, f1: 120, dur: 0.5, vol: 0.1, ftype: 'lowpass' }); },
+    MINDBEAM: () => { tone({ f0: 520, f1: 1180, dur: 0.42, vol: 0.14, type: 'sine' }); tone({ f0: 532, f1: 1210, dur: 0.42, vol: 0.12, type: 'triangle' }); noise({ f0: 3000, f1: 6200, dur: 0.3, vol: 0.05, ftype: 'highpass', delay: 0.12 }); },
+    PSYBLAST: () => { tone({ f0: 300, f1: 1500, dur: 0.3, vol: 0.12, type: 'sine' }); tone({ f0: 1568, dur: 0.5, vol: 0.12, type: 'sine', delay: 0.28 }); tone({ f0: 90, f1: 38, dur: 0.4, vol: 0.3, type: 'sine', delay: 0.28 }); noise({ f0: 1200, f1: 200, dur: 0.4, vol: 0.3, delay: 0.28 }); },
+    CINDER: () => { noise({ f0: 300, f1: 2400, dur: 0.25, vol: 0.2, ftype: 'bandpass', q: 0.8 }); noise({ f0: 3000, f1: 5000, dur: 0.3, vol: 0.08, ftype: 'highpass', delay: 0.05 }); tone({ f0: 120, f1: 48, dur: 0.3, vol: 0.18, type: 'sine', delay: 0.1 }); },
+    SCORCH: () => { noise({ f0: 400, f1: 120, dur: 0.5, vol: 0.4, ftype: 'lowpass', q: 1.4 }); noise({ f0: 2600, f1: 4800, dur: 0.4, vol: 0.1, ftype: 'highpass' }); tone({ f0: 110, f1: 38, dur: 0.45, vol: 0.32, type: 'sine', delay: 0.05 }); },
+    LEAFRAZOR: () => { noise({ f0: 1200, f1: 4200, dur: 0.12, vol: 0.22, ftype: 'bandpass', q: 2.4 }); tone({ f0: 1800, f1: 600, dur: 0.14, vol: 0.1, type: 'sawtooth', delay: 0.02 }); },
+    SEEDBURST: () => { for (let i = 0; i < 5; i++) noise({ f0: 1800, f1: 600, dur: 0.05, vol: 0.12, ftype: 'bandpass', q: 3, delay: i * 0.05 }); tone({ f0: 880, dur: 0.18, vol: 0.08, type: 'triangle', delay: 0.1 }); },
+    VOIDLANCE: () => { tone({ f0: 740, f1: 300, dur: 0.5, vol: 0.14, type: 'square' }); tone({ f0: 300, f1: 740, dur: 0.5, vol: 0.1, type: 'sawtooth' }); tone({ f0: 60, f1: 40, dur: 0.6, vol: 0.3, type: 'sine' }); noise({ f0: 1400, f1: 400, dur: 0.4, vol: 0.12, ftype: 'bandpass', q: 6, delay: 0.1 }); },
+    VOIDSTORM: () => { noise({ f0: 200, f1: 3000, dur: 0.5, vol: 0.18, ftype: 'bandpass', q: 1.5 }); tone({ f0: 880, f1: 200, dur: 0.5, vol: 0.12, type: 'square' }); tone({ f0: 55, f1: 36, dur: 0.6, vol: 0.3, type: 'sine' }); },
+    DREADWAVE: () => { tone({ f0: 140, f1: 90, dur: 0.5, vol: 0.2, type: 'sawtooth' }); tone({ f0: 70, f1: 46, dur: 0.6, vol: 0.26, type: 'sine' }); noise({ f0: 600, f1: 160, dur: 0.5, vol: 0.12, ftype: 'lowpass' }); },
+    ABYSSNOVA: () => { noise({ f0: 800, f1: 48, dur: 0.7, vol: 0.6, ftype: 'lowpass', q: 1.2 }); tone({ f0: 80, f1: 26, dur: 0.7, vol: 0.4, type: 'sine' }); [330, 466, 622].forEach((f, i) => tone({ f0: f, dur: 0.6, vol: 0.1, type: 'sawtooth', delay: i * 0.02 })); },
+    AWAKEN: () => { tone({ f0: 120, f1: 900, dur: 0.8, vol: 0.2, type: 'sawtooth' }); tone({ f0: 60, f1: 200, dur: 0.8, vol: 0.2, type: 'sine' }); noise({ f0: 400, f1: 4000, dur: 0.8, vol: 0.12, ftype: 'bandpass', q: 1 }); },
+  };
+
   // soft night-forest bed: filtered noise pad + scheduled cricket chirps
   function startAmbience() {
     if (!ctx) return;
@@ -143,9 +166,68 @@ const Sfx = (() => {
     ambTimer = setTimeout(chirp, 1200);
   }
 
+  // ---- procedural battle music (no audio files; a small step sequencer) ----
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function mnote(midi, when, dur, vol, type) {
+    if (!ctx || !midi) return;
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = type || 'triangle';
+    osc.frequency.setValueAtTime(hz(midi), when);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol, when + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(g); g.connect(musicGain);
+    osc.start(when); osc.stop(when + dur + 0.05);
+  }
+  // 4-bar loops: chord pad (per bar), bass (per bar) + sub octave, lead (per beat)
+  const TRACKS = {
+    battle: { // heroic / majestic — Am F C G
+      bpm: 142,
+      chords: [[57, 60, 64], [53, 57, 60], [52, 55, 60], [55, 59, 62]],
+      bass: [45, 41, 48, 43],
+      lead: [69, 0, 72, 76, 74, 0, 72, 69, 67, 72, 76, 0, 74, 71, 67, 62],
+    },
+    boss: { // dark / intense — Dm Bb Gm A(maj for tension)
+      bpm: 154,
+      chords: [[50, 53, 57], [46, 50, 53], [55, 58, 62], [57, 61, 64]],
+      bass: [38, 34, 43, 45],
+      lead: [62, 0, 65, 68, 70, 0, 69, 65, 67, 70, 74, 0, 73, 0, 69, 64],
+    },
+  };
+  function scheduleMusic() {
+    music.timer = null;
+    if (!music.on || !ctx) return;
+    const tr = TRACKS[music.track]; if (!tr) return;
+    const spb = 60 / tr.bpm;
+    while (music.nextTime < ctx.currentTime + 0.25) {
+      const beat = music.step % 16, bar = (beat / 4) | 0;
+      mnote(tr.bass[bar], music.nextTime, spb * 0.95, 0.4, 'triangle');
+      mnote(tr.bass[bar] - 12, music.nextTime, spb * 0.95, 0.18, 'sine');
+      if (beat % 4 === 0) for (const c of tr.chords[bar]) mnote(c, music.nextTime, spb * 3.7, 0.12, 'triangle');
+      if (tr.lead[beat]) mnote(tr.lead[beat], music.nextTime, spb * 0.85, 0.32, 'sawtooth');
+      music.nextTime += spb;
+      music.step++;
+    }
+    music.timer = setTimeout(scheduleMusic, 60);
+  }
+  function startMusic(track) {
+    pendingTrack = track;
+    if (!ctx) return; // will start once audio unlocks
+    music.on = true; music.track = track; music.step = 0;
+    music.nextTime = ctx.currentTime + 0.1;
+    if (music.timer) { clearTimeout(music.timer); music.timer = null; }
+    scheduleMusic();
+  }
+  function stopMusic() {
+    pendingTrack = null; music.on = false;
+    if (music.timer) { clearTimeout(music.timer); music.timer = null; }
+  }
+
   return {
     unlock,
     play: (name) => { if (ctx && FX[name]) FX[name](); },
+    move: (id) => { if (ctx) (MOVEFX[id] || FX.impact)(); },
+    startMusic, stopMusic,
     toggleMute: () => {
       muted = !muted;
       if (master) master.gain.value = muted ? 0 : 0.45;
