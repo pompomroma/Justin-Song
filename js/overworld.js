@@ -20,15 +20,16 @@ const Overworld = (() => {
   const BOUND = 16.5;
 
   // trainer NPCs — one monster each. dlg keys live in BData.DIALOGUE.
+  // each trainer now fields a small, varied team (sent in one at a time)
   const NPCS = [
     { id: 'rex',   name: 'Camper REX', pos: [7, 0, 3.2],   model: 'rex_idle',  battleModel: 'rex_raised',
-      enemy: { species: 'MAGMULE', level: 14 } },
+      team: [{ species: 'MAGMULE', level: 13 }, { species: 'EMBERIK', level: 14 }] },
     { id: 'hiker', name: 'Hiker DALE', pos: [-11, 0, 6],   model: 'npc_hiker', battleModel: 'npc_hiker',
-      enemy: { species: 'THORNLET', level: 12 } },
+      team: [{ species: 'THORNLET', level: 12 }, { species: 'MAGMULE', level: 11 }, { species: 'THORNLET', level: 13 }] },
     { id: 'lass',  name: 'Lass IVY',   pos: [12, 0, -8],   model: 'npc_lass',  battleModel: 'npc_lass',
-      enemy: { species: 'EMBERIK', level: 13 } },
+      team: [{ species: 'EMBERIK', level: 12 }, { species: 'PIXLIT', level: 13 }, { species: 'THORNLET', level: 12 }] },
     { id: 'ace',   name: 'Ace KORU',   pos: [-8.5, 0, -12], model: 'npc_ace',  battleModel: 'npc_ace',
-      enemy: { species: 'MAGMULE', level: 16 } },
+      team: [{ species: 'MAGMULE', level: 15 }, { species: 'EMBERIK', level: 15 }, { species: 'PIXLIT', level: 16 }] },
   ];
 
   let staticH = null;
@@ -41,6 +42,17 @@ const Overworld = (() => {
   let pendingAction = null;  // fn run when dialogue closes
   let cardT = 0, hintT = 0, t = 0;
   let fireflyT = 0, emberT = 0, swirlT = 0;
+  let partyView = false, partyCheckCursor = 0; // C opens a read-only party check
+
+  // read-only party rows for the overworld party check
+  function savePartyRows() {
+    return Game.save.party.map((m) => {
+      const stats = BData.statsFor(m.species, m.level);
+      const hp = (m.hp === null || m.hp === undefined) ? stats.maxHp : m.hp;
+      return { name: BData.SPECIES[m.species].name, lv: m.level, hp: Math.round(hp), maxHp: stats.maxHp,
+               frac: hp / stats.maxHp, fainted: hp <= 0, active: false };
+    });
+  }
 
   function buildStatic() {
     if (staticH) return;
@@ -160,7 +172,7 @@ const Overworld = (() => {
     } else {
       startDialogue(dlg.intro || ['Let us battle!'], () =>
         Game.toBattle({ arena: 'grove', npcId: n.id,
-          enemy: { species: n.enemy.species, level: n.enemy.level, trainer: n.name, npcId: n.id, trainerModel: n.battleModel } }));
+          enemy: { team: n.team.map((m) => ({ species: m.species, level: m.level })), trainer: n.name, npcId: n.id, trainerModel: n.battleModel } }));
     }
   }
 
@@ -185,6 +197,17 @@ const Overworld = (() => {
     t += dt;
     if (cardT > 0) cardT -= dt;
     if (hintT > 0) hintT -= dt;
+
+    if (partyView) { // read-only party check (paused)
+      const n = Math.max(1, Game.save.party.length);
+      if (Input.pressed('down')) { partyCheckCursor = (partyCheckCursor + 1) % n; Sfx.play('cursor'); }
+      if (Input.pressed('up')) { partyCheckCursor = (partyCheckCursor + n - 1) % n; Sfx.play('cursor'); }
+      if (Input.pressed('party') || Input.pressed('back') || Input.pressed('confirm')) { partyView = false; Sfx.play('cursor'); }
+      moving = false;
+      Cam.follow(hero.pos, camYaw, { dist: 4.4, height: 2.3 }, dt);
+      Cam.update(dt);
+      return;
+    }
 
     if (dialogue) { updateDialogue(dt); moving = false; }
     else if (!Fx.transitioning()) {
@@ -221,7 +244,8 @@ const Overworld = (() => {
         if (d < min && d > 0.0001) { hero.pos[0] = c.x + dx / d * min; hero.pos[2] = c.z + dz / d * min; }
       }
       const near = nearest();
-      if (near && Input.pressed('confirm')) interact(near);
+      if (Input.pressed('party')) { partyView = true; partyCheckCursor = 0; Sfx.play('confirm'); }
+      else if (near && Input.pressed('confirm')) interact(near);
     }
 
     // atmosphere: fireflies, campfire embers, and a swirling portal
@@ -268,8 +292,9 @@ const Overworld = (() => {
   }
 
   function renderUi(ctx) {
+    if (partyView) { UI.partyPanel(ctx, savePartyRows(), partyCheckCursor, t, false); return; }
     if (cardT > 0) UI.locationCard(ctx, 'WHISPER GROVE', M3.clamp(cardT, 0, 1));
-    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute   T: Stats']);
+    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'C: Party   M: Mute']);
     if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }
     if (Fx.transitioning()) return;
     const near = nearest();

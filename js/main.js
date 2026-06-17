@@ -40,9 +40,9 @@ const Game = (() => {
   // hp: null means "full HP" (resolved against statsFor at battle start)
   const save = {
     party: [
-      { species: 'PIXLIT', level: 10, hp: 17 }, // worn from the journey
-      { species: 'THORNLET', level: 9, hp: null },
-      { species: 'EMBERIK', level: 9, hp: null },
+      { species: 'PIXLIT', level: 10, hp: 17, exp: 0 }, // worn from the journey
+      { species: 'THORNLET', level: 9, hp: null, exp: 0 },
+      { species: 'EMBERIK', level: 9, hp: null, exp: 0 },
     ],
     npcs: {},            // npcId -> true once that trainer is beaten
     bossBeaten: false,

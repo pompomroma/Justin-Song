@@ -21,23 +21,28 @@ animation. Its attacks are the flashiest of any monster. Weaken and
 capture it with a Voxball and it joins your party; as your ally you can
 trigger that same transformation yourself with its **Awaken** move.
 
-Every attack casts **dynamic colored light** into the scene — beams,
-explosions and the boss's void blasts briefly light up the arena, the
-cliff and both monsters in the move's color. Every hit also throws a
-**forked lightning bolt + sparks + a thunder crack** (and the attacker
-crackles with electricity on wind-up), for all monsters in normal and
-boss battles. The dungeon is lit clearly enough to read everything while
-staying moody and violet.
+Every attack casts **dynamic colored light** into the scene with a
+realistic soft falloff — beams, explosions and the boss's void blasts
+briefly light up the arena, the cliff and both monsters in the move's
+color. Every hit also throws a **forked lightning bolt (bright core +
+glow) + sparks + a thunder crack** (and the attacker crackles with
+electricity on wind-up), for all monsters in normal and boss battles.
 
-Battles are always 1v1, but you command a **party of up to six
-allies**: switch freely mid-battle (a switch uses your turn), and when
-an ally faints you pick the next one to send in. The command menu has
-four slots — **Items** (Heal restores 50% HP, Cure wipes stat debuffs
-like Growl; 3 charges each per battle), **Capture** (hurl a Voxball;
-odds rise the more hurt the target is — caught monsters join your
-party), **Run** (slip away and try again later) and **Attack** (the
-four-move grid). Every action gets its own camera move and effect
-choreography. Blacking out fully heals the party.
+Battles are always 1v1, but both sides field teams: you command a
+**party of up to six**, and trainers now bring **2–3 varied monsters**
+and send the next one when one drops. Switch freely (a switch uses your
+turn); when your ally faints you pick the next, and when the **opponent's
+monster is beaten or captured the game asks if you want to switch** too.
+Check your team any time with **C** (in battle and in the overworld).
+The command menu has four slots — **Items** (Heal 50% HP / Cure debuffs,
+3 charges each), **Capture** (Voxball; odds rise the more hurt the
+target), **Run**, and **Attack**. Every action gets its own camera move
+and effects. Blacking out fully heals the party, and **every battle
+fully heals your party afterward**.
+
+**EXP Share:** defeating a monster grants generous EXP to your **whole
+party equally**, and crossing the threshold **levels monsters up** (HP
+and stats grow). The bar under your active ally shows its progress.
 
 ## Run it
 

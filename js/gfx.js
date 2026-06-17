@@ -22,11 +22,13 @@ void main() {
   gl_Position = uProj * vp;
   vec3 n = normalize((uModel * vec4(aNrm, 0.0)).xyz);
   float lam = max(dot(n, -uLightDir), 0.0);
-  // dynamic point light (attacks/effects pulse this into the scene)
+  // dynamic point light (attacks/effects pulse this into the scene) — smooth
+  // inverse-square falloff + half-lambert wrap for soft, realistic spill
   vec3 toL = uPointPos - wp.xyz;
-  float att = max(0.0, 1.0 - length(toL) / uPointRad);
-  float plam = max(dot(n, normalize(toL)), 0.0) * att * att * uPointInt;
-  vec3 lit = aCol * (uAmbient + uLightCol * lam + uPointCol * plam);
+  float d2 = dot(toL, toL);
+  float att = min(1.5, uPointRad * uPointRad / (d2 + uPointRad * uPointRad * 0.35 + 0.0001));
+  float plam = (dot(n, normalize(toL)) * 0.5 + 0.5) * att * uPointInt;
+  vec3 lit = aCol * (uAmbient + uLightCol * lam) + uPointCol * plam * aCol;
   vec3 c = mix(lit, aCol, uUnlit);
   vCol = mix(c, vec3(1.0), uFlash) * uTint;
   vDist = length(vp.xyz);

@@ -91,6 +91,12 @@ const BData = (() => {
     return { dmg: Math.max(1, Math.floor(base)), crit, miss: false };
   }
 
+  // EXP / leveling. Every party member gains the SAME reward (exp share);
+  // reward is generous per elimination. Level cap MAXLV.
+  const MAXLV = 60;
+  const expReward = (level) => 30 + level * 18;
+  const expToNext = (level) => 50 + level * level * 10;
+
   // capture odds scale with how hurt the target is
   // bosses are far harder to catch; only realistic when badly weakened
   const captureChance = (hpFrac, isBoss) => {
@@ -149,6 +155,9 @@ const BData = (() => {
     faint: '{A} fainted!',
     win1: 'You defeated {T}!',
     win3: '{A} gained {E} EXP. Points!',
+    expGain: 'Each ally gained {E} EXP. Points!',
+    levelUp: '{A} grew to Lv. {L}!',
+    askSwitch: 'Will you switch your {A}?',
     lose1: 'You have no creatures that can fight!',
     lose2: 'You blacked out!',
     // dungeon boss
@@ -190,5 +199,6 @@ const BData = (() => {
     portalDone: ['The rift is silent now. Only embers drift through it.'],
   };
 
-  return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick, MSG, fmt, DIALOGUE };
+  return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick,
+           MAXLV, expReward, expToNext, MSG, fmt, DIALOGUE };
 })();

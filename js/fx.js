@@ -95,26 +95,33 @@ const Fx = (() => {
   }
 
   // ---- electric / lightning effects ----
-  // a jagged lightning bolt from -> to (cubes laid along zig-zag segments,
-  // amplitude tapering to 0 at the endpoints), with optional forks.
+  // a realistic lightning bolt from -> to: a continuous random-walk path in
+  // the perpendicular plane (taut, tapering to the endpoints) drawn as a
+  // bright thin white core wrapped in a dimmer colored glow, plus forks.
   function bolt(from, to, o) {
     o = o || {};
     const segs = o.segs || 8, jitter = o.jitter || 0.5, dense = o.dense || 4;
     const colors = o.colors || [[1, 1, 1], [0.62, 0.86, 1], [0.82, 0.92, 1]];
     const life = o.life || 0.14, s = o.s || 0.06;
-    const pts = [];
+    let dir = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+    const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1; dir = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
+    let rt = [-dir[2], 0, dir[0]]; const rl = Math.hypot(rt[0], rt[1], rt[2]) || 1; rt = [rt[0] / rl, rt[1] / rl, rt[2] / rl];
+    const up = [dir[1] * rt[2] - dir[2] * rt[1], dir[2] * rt[0] - dir[0] * rt[2], dir[0] * rt[1] - dir[1] * rt[0]];
+    const pts = []; let ox = 0, oy = 0;
     for (let i = 0; i <= segs; i++) {
-      const u = i / segs, amp = jitter * Math.sin(u * Math.PI);
-      pts.push([from[0] + (to[0] - from[0]) * u + (rnd() - 0.5) * amp,
-                from[1] + (to[1] - from[1]) * u + (rnd() - 0.5) * amp,
-                from[2] + (to[2] - from[2]) * u + (rnd() - 0.5) * amp]);
+      const u = i / segs, taper = Math.sin(u * Math.PI);
+      ox = ox * 0.7 + (rnd() - 0.5) * jitter; oy = oy * 0.7 + (rnd() - 0.5) * jitter;
+      pts.push([from[0] + dir[0] * dl * u + (rt[0] * ox + up[0] * oy) * taper,
+                from[1] + dir[1] * dl * u + (rt[1] * ox + up[1] * oy) * taper,
+                from[2] + dir[2] * dl * u + (rt[2] * ox + up[2] * oy) * taper]);
     }
     for (let i = 0; i < segs; i++) {
       const a = pts[i], b = pts[i + 1];
       for (let k = 0; k < dense; k++) {
         const t = k / dense;
-        spawn({ p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
-                c: pick(colors, rnd), v: [0, 0, 0], life: life * (0.7 + rnd() * 0.6), s, s1: 0.008 });
+        const p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        spawn({ p, c: [1, 1, 1], v: [0, 0, 0], life: life * (0.6 + rnd() * 0.5), s: s * 0.7, s1: 0.005 }); // searing core
+        if (k % 2 === 0) spawn({ p, c: pick(colors, rnd), v: [0, 0, 0], life: life * (0.7 + rnd() * 0.6), s: s * 1.4, s1: 0.01 }); // glow
       }
     }
     const forks = o.forks || 0;
@@ -124,7 +131,7 @@ const Fx = (() => {
       for (let k = 0; k < 4; k++) {
         const t = k / 4;
         spawn({ p: [a[0] + dx * len * t, a[1] + dy * len * t, a[2] + dz * len * t],
-                c: pick(colors, rnd), v: [0, 0, 0], life: life * 0.8, s: s * 0.85, s1: 0.006 });
+                c: k % 2 ? [1, 1, 1] : pick(colors, rnd), v: [0, 0, 0], life: life * 0.8, s: s * 0.8, s1: 0.005 });
       }
     }
   }

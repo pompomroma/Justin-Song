@@ -375,5 +375,27 @@ function attackCycle(sb) {
   ok(sb.__errors.length === 0, 'no errors through the inset toggle');
 }
 
+// ---------------- run 11: multi-monster NPC battle + switch prompt + EXP
+{
+  const sb = makeSandbox('');
+  vm.runInContext(`(${function () {
+    const realDmg = BData.damage;            // player crushes; the foes only chip
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 50 : 2; return r; };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  vm.runInContext('__Game.toBattle({ arena:"grove", npcId:"rex", enemy:{ team:[{species:"MAGMULE",level:13},{species:"EMBERIK",level:13}], trainer:"Camper REX", npcId:"rex", trainerModel:"rex_raised" } })', sb);
+  let frames = 0;
+  while (frames < 50000 && !vm.runInContext('globalThis.__battleEnd', sb)) { attackCycle(sb); frames += 40; }
+  const ended = vm.runInContext('globalThis.__battleEnd', sb);
+  const rexBeaten = vm.runInContext('__Game.save.npcs.rex === true', sb);
+  ok(ended === 'win' && rexBeaten, 'multi-monster NPC battle completes as a win (' + ended + ', ' + frames + ' frames)');
+  const exp = vm.runInContext('__Game.save.party[1].exp', sb);
+  ok(typeof exp === 'number', 'shared EXP is tracked on a benched ally (' + exp + ')');
+  ok(sb.__errors.length === 0, 'no errors through the multi-monster battle + switch prompt' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');
 process.exit(failures ? 1 : 0);

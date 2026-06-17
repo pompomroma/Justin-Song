@@ -67,13 +67,16 @@ const Battle = (() => {
   let player = null, enemy = null, rex = null; // actors
   let pParty = [];             // combat states for the whole player party
   let activeIdx = 0;
+  let eParty = [];             // enemy party (NPCs now field several monsters)
+  let eActiveIdx = 0;
   let pState = null, eState = null;
   let items = { heal: 3, cure: 3 };
   let state = 'INTRO';         // INTRO | MENU | TURN | FLY | DONE
   let mode = 'none';           // UI: none | menu | msg
   let menuMode = 'top';        // top | moves | items | party
   let topCursor = 0, moveCursor = 0, itemCursor = 0, partyCursor = 0;
-  let awaitParty = false, pickedAlly = -1; // forced switch handshake
+  let awaitParty = false, pickedAlly = -1, awaitOptional = false; // switch handshake
+  let awaitAsk = false, askCursor = 0, askChoice = -1, askText = ''; // yes/no prompt
   let tw = null;
   let waitingConfirm = false;
   let expFrac = 0.30, expTween = null;
@@ -163,6 +166,16 @@ const Battle = (() => {
   const drained = (st) => () => Math.abs(st.displayHp - st.hp) < 0.4;
   const othersAlive = () => pParty.some((m, i) => i !== activeIdx && m.hp > 0);
   const firstAliveIdx = () => pParty.findIndex((m, i) => i !== activeIdx && m.hp > 0);
+  const enemyAlive = () => eParty.some((m) => m.hp > 0);
+
+  function makeEnemy(species, level, isBoss) {
+    const sp = BData.SPECIES[species];
+    const stats = BData.statsFor(species, level);
+    const epp = {}; for (const id of sp.moves) epp[id] = BData.MOVES[id].pp;
+    return { id: species, baseId: species, name: sp.name, level, stats,
+             hp: stats.maxHp, displayHp: stats.maxHp, drainRate: 60, atkStage: 0,
+             moves: sp.moves.slice(), epp, isBoss: !!isBoss, form: 0, threshold: 0.55 };
+  }
 
   // camera shots ----------------------------------------------------------
   function camDefault(ms) {
@@ -988,10 +1001,8 @@ const Battle = (() => {
     Sfx.play('victory');
     yield* say(BData.fmt(BData.MSG.win1, { T: (curEnemy && curEnemy.trainer) || eState.name }));
     if (boss) { yield* say(BData.MSG.bossWin1); yield* say(BData.MSG.bossWin2); }
-    expTween = { from: expFrac, to: 0.78, t: 0, dur: 0.8 };
-    yield* say(BData.fmt(BData.MSG.win3, { A: pState.name, E: boss ? '600' : '135' }));
     yield 250;
-    endBattle('win');
+    endBattle('win'); // EXP was already awarded to the whole party on the KO
   }
 
   function* defeatSeq() {
@@ -1142,6 +1153,7 @@ const Battle = (() => {
     }
     activeIdx = to;
     pState = pParty[to];
+    expFrac = M3.clamp(pState.exp / BData.expToNext(pState.level), 0, 1); expTween = null;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
     player.visible = false;
     yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
@@ -1157,6 +1169,65 @@ const Battle = (() => {
     yield () => pickedAlly >= 0;
     awaitParty = false;
     yield* switchSeq(pickedAlly, false);
+  }
+
+  // EXP share: the WHOLE party gains the same amount, with level-ups
+  // (stats recompute; living members gain the maxHP increase).
+  function* awardExp(amount) {
+    const ups = [];
+    for (const m of pParty) {
+      m.exp = (m.exp || 0) + amount;
+      while (m.level < BData.MAXLV && m.exp >= BData.expToNext(m.level)) {
+        m.exp -= BData.expToNext(m.level);
+        m.level++;
+        const old = m.stats.maxHp;
+        m.stats = BData.statsFor(m.id, m.level);
+        if (m.hp > 0) m.hp = Math.min(m.stats.maxHp, m.hp + (m.stats.maxHp - old));
+        else m.displayHp = m.hp;
+        ups.push({ name: m.name, level: m.level });
+      }
+    }
+    expTween = { from: expFrac, to: M3.clamp(pState.exp / BData.expToNext(pState.level), 0, 1), t: 0, dur: 0.7 };
+    Sfx.play('confirm');
+    yield* say(BData.fmt(BData.MSG.expGain, { E: amount }), { auto: true, hold: 280 });
+    for (const u of ups) { Sfx.play('spawn'); yield* say(BData.fmt(BData.MSG.levelUp, { A: u.name, L: u.level }), { auto: true, hold: 240 }); }
+  }
+
+  // offered when the opponent's monster goes down: ask the player to switch
+  function* offerSwitch() {
+    if (!othersAlive()) return;
+    state = 'TURN'; mode = 'ask';
+    askText = BData.fmt(BData.MSG.askSwitch, { A: pState.name });
+    askCursor = 1; askChoice = -1; awaitAsk = true; // default highlight "No"
+    yield () => askChoice >= 0;
+    awaitAsk = false; mode = 'none';
+    if (askChoice === 1) {
+      mode = 'msg'; tw.set(BData.MSG.choose);
+      const fa = firstAliveIdx();
+      partyCursor = fa >= 0 ? fa : activeIdx;
+      pickedAlly = -1; awaitParty = true; awaitOptional = true;
+      yield () => pickedAlly !== -1;
+      awaitParty = false; awaitOptional = false; mode = 'none';
+      if (pickedAlly >= 0 && pickedAlly !== activeIdx && pParty[pickedAlly].hp > 0) yield* switchSeq(pickedAlly, true);
+    }
+  }
+
+  // the opponent sends in its next monster
+  function* sendNextEnemy() {
+    eActiveIdx = eParty.findIndex((m) => m.hp > 0);
+    eState = eParty[eActiveIdx];
+    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
+    enemy = actor(modelOf(eState.id), ePos, YAW_M);
+    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
+    enemy.visible = false;
+    yield* say(BData.fmt(BData.MSG.sentOut, { T: (curEnemy && curEnemy.trainer) || 'The foe', M: eState.name }), { auto: true, hold: 150 });
+    yield* spawnIn(enemy, themeOf(eState.id));
+  }
+
+  // after the active enemy is removed (fainted/captured) and more remain
+  function* afterEnemyDown() {
+    yield* offerSwitch();
+    yield* sendNextEnemy();
   }
 
   function* itemSeq(which) {
@@ -1290,11 +1361,12 @@ const Battle = (() => {
       Sfx.play('victory');
       yield 700;
       yield* say(BData.fmt(BData.MSG.caught, { A: eState.name }));
-      Game.save.party.push({ species: eState.baseId || eState.id, level: eState.level, hp: Math.max(1, eState.hp) });
+      if (Game.save.party.length < 6)
+        Game.save.party.push({ species: eState.baseId || eState.id, level: eState.level, hp: Math.max(1, eState.hp), exp: 0 });
       yield* say(BData.fmt(BData.MSG.joined, { A: eState.name }));
       ball.visible = false;
-      endBattle('capture');
-      return true;
+      eState.hp = 0; // remove from the enemy party; turnScript handles win vs. next
+      return 'caught';
     }
     // broke free — violent red burst + shockwave
     Sfx.play('impact'); Sfx.play('boom');
@@ -1311,7 +1383,7 @@ const Battle = (() => {
     camDefault();
     yield 420;
     yield* say(BData.fmt(BData.MSG.broke, { A: eState.name }));
-    return false;
+    return 'broke';
   }
 
   function* runSeq() {
@@ -1343,7 +1415,11 @@ const Battle = (() => {
   function* turnScript(action) {
     if (action.type === 'run') { yield* runSeq(); return; }
     if (action.type === 'capture') {
-      if (yield* captureSeq()) return;
+      const r = yield* captureSeq(); // 'caught' | 'broke'
+      if (r === 'caught') {
+        if (enemyAlive()) { yield* afterEnemyDown(); backToMenu(); return; }
+        endBattle('capture'); return;
+      }
       if (!(yield* enemyTurn())) return;
       backToMenu(); return;
     }
@@ -1373,7 +1449,11 @@ const Battle = (() => {
       const victim = other(s);
       if (sideState(victim).hp <= 0) {
         yield* faintSeq(victim);
-        if (victim === 'E') { yield* victorySeq(); return; }
+        if (victim === 'E') {
+          yield* awardExp(BData.expReward(eState.level));
+          if (enemyAlive()) { yield* afterEnemyDown(); break; } // more foes; player's turn next
+          yield* victorySeq(); return;
+        }
         if (othersAlive()) { yield* forcedSwitch(); break; }
         yield* defeatSeq(); return;
       }
@@ -1441,7 +1521,12 @@ const Battle = (() => {
   function endBattle(result) {
     state = 'DONE';
     mode = 'none';
-    // fully heal the whole party (incl. any monster just captured) after every battle
+    // persist levels/EXP gained, then fully heal the whole party (incl. a
+    // monster just captured) after every battle
+    for (let i = 0; i < pParty.length && i < Game.save.party.length; i++) {
+      Game.save.party[i].level = pParty[i].level;
+      Game.save.party[i].exp = pParty[i].exp;
+    }
     for (let i = 0; i < Game.save.party.length; i++) Game.save.party[i].hp = null;
     Game.onBattleEnd(result, curEnemy);
   }
@@ -1557,31 +1642,29 @@ const Battle = (() => {
       const stats = BData.statsFor(m.species, m.level);
       const hp = m.hp === null || m.hp === undefined ? stats.maxHp : M3.clamp(m.hp, 0, stats.maxHp);
       const pp = (sp.ppInit || sp.moves.map((id) => BData.MOVES[id].pp)).slice();
-      return { id: m.species, name: sp.name, level: m.level, stats,
+      return { id: m.species, name: sp.name, level: m.level, exp: m.exp || 0, stats,
                hp, displayHp: hp, drainRate: 60, atkStage: 0, form: 0,
                moves: sp.moves.slice(), pp };
     });
     activeIdx = Math.max(0, pParty.findIndex((m) => m.hp > 0));
     pState = pParty[activeIdx];
 
-    // enemy combat state from the descriptor (any species; boss-aware)
-    const eId = curEnemy.species, eLv = curEnemy.level || 15;
-    const esp = BData.SPECIES[eId];
-    const eStats = BData.statsFor(eId, eLv);
-    const epp = {}; for (const id of esp.moves) epp[id] = BData.MOVES[id].pp;
-    eState = { id: eId, baseId: eId, name: esp.name, level: eLv, stats: eStats,
-               hp: eStats.maxHp, displayHp: eStats.maxHp, drainRate: 60, atkStage: 0,
-               moves: esp.moves.slice(), epp, isBoss: !!curEnemy.isBoss, form: 0, threshold: 0.55 };
+    // enemy party from the descriptor (NPCs field several monsters; boss is one)
+    const team = curEnemy.team || [{ species: curEnemy.species || 'MAGMULE', level: curEnemy.level || 15 }];
+    eParty = team.map((m) => makeEnemy(m.species, m.level, curEnemy.isBoss));
+    eActiveIdx = 0;
+    eState = eParty[0];
 
     const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
-    enemy = actor(modelOf(eId), ePos, YAW_M);
+    enemy = actor(modelOf(eState.id), ePos, YAW_M);
     if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
     rex = actor(curEnemy.trainerModel || 'rex_raised', REX_POS, YAW_M + 0.15);
     items = { heal: BData.ITEMS.heal.uses, cure: BData.ITEMS.cure.uses };
-    expFrac = 0.30; expTween = null;
+    expFrac = M3.clamp(pState.exp / BData.expToNext(pState.level), 0, 1); expTween = null;
     topCursor = 0; moveCursor = 0; itemCursor = 0; partyCursor = 0;
-    awaitParty = false; pickedAlly = -1;
+    awaitParty = false; pickedAlly = -1; awaitOptional = false;
+    awaitAsk = false; askChoice = -1; askCursor = 1;
     ball.visible = false; ball.flight = null;
 
     if (params.fly) {
@@ -1648,10 +1731,22 @@ const Battle = (() => {
       else startTurn({ type: 'switch', to: partyCursor });
       return;
     }
-    if (!forced && (Input.pressed('back') || Input.pressed('party'))) {
+    if ((awaitOptional || !forced) && (Input.pressed('back') || Input.pressed('party'))) {
       Sfx.play('cursor');
-      menuMode = 'top';
+      if (forced) pickedAlly = activeIdx; // optional switch cancelled -> stay in
+      else menuMode = 'top';
     }
+  }
+
+  // yes/no prompt (offered when the opponent's monster goes down)
+  function handleAsk() {
+    if (Input.pressed('left') || Input.pressed('right')) { askCursor ^= 1; Sfx.play('cursor'); }
+    const hov = hitRects([UI.MOVE_RECTS[0], UI.MOVE_RECTS[1]], 2);
+    if (hov >= 0) askCursor = hov;
+    if (Input.pressed('confirm') || (hov >= 0 && Input.mouse.clicked)) {
+      Sfx.play('confirm'); askChoice = askCursor === 0 ? 1 : 0; return;
+    }
+    if (Input.pressed('back')) { Sfx.play('cursor'); askChoice = 0; }
   }
 
   function updateMenu() {
@@ -1805,6 +1900,7 @@ const Battle = (() => {
     }
 
     if (state === 'MENU') updateMenu();
+    else if (awaitAsk) handleAsk();
     else if (awaitParty) handlePartyNav(true);
     else if (state === 'FLY') updateFly(rawDt);
   }
@@ -1825,10 +1921,12 @@ const Battle = (() => {
 
   function renderUi(ctx) {
     UI.redFrame(ctx);
+    const eballs = [];
+    for (let i = 0; i < 6; i++) eballs.push(i < eParty.length ? (eParty[i].hp > 0 ? 'full' : 'faded') : 'empty');
     UI.enemyPanel(ctx, {
       name: eState.name, lv: eState.level,
       hpFrac: eState.displayHp / eState.stats.maxHp,
-      party: ['faded', 'full', 'empty', 'empty', 'empty', 'empty'],
+      party: eballs,
     });
     UI.playerPanel(ctx, {
       name: pState.name, lv: pState.level,
@@ -1867,6 +1965,9 @@ const Battle = (() => {
       }
     } else if (mode === 'msg') {
       UI.msgBox(ctx, tw, t, waitingConfirm);
+    } else if (mode === 'ask') {
+      PFont.draw(ctx, askText, 470, 360, { scale: 2, color: '#ffffff', outline: '#1a1a22' });
+      UI.actionGrid(ctx, [{ label: 'Yes', style: 'HEAL' }, { label: 'No', style: 'BACK' }], askCursor, t);
     }
     if (awaitParty)
       UI.partyPanel(ctx, partyRows(), partyCursor, t, true);

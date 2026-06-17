@@ -79,7 +79,7 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
 {
   const strings = [];
   for (const k in BData.MSG)
-    strings.push(BData.fmt(BData.MSG[k], { A: 'MAGMULE', M: 'Psyblast', T: 'Camper REX', B: 'VORNETH-X', E: '135' }));
+    strings.push(BData.fmt(BData.MSG[k], { A: 'MAGMULE', M: 'Psyblast', T: 'Camper REX', B: 'VORNETH-X', E: '135', L: '12' }));
   const collect = (v) => { if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object') Object.values(v).forEach(collect); else if (typeof v === 'string') strings.push(v); };
   collect(BData.DIALOGUE);
   for (const k in BData.MOVES) strings.push(BData.MOVES[k].name);
@@ -136,6 +136,17 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   ok(BData.captureChance(0.1, true) < BData.captureChance(0.1, false), 'boss is harder to capture');
   const bs = BData.statsFor('VORNETH', 16), bx = BData.statsFor('VORNETH_X', 16);
   ok(bx.atk > bs.atk && bx.spe > bs.spe, 'awakened form is stronger (atk/spe)');
+
+  // EXP / leveling
+  ok(BData.expReward(20) > BData.expReward(10) && BData.expReward(10) >= 200,
+     'exp reward is generous and scales with foe level (' + BData.expReward(14) + ' @14)');
+  ok(BData.expToNext(11) > BData.expToNext(10) && BData.expToNext(10) > 0, 'exp-to-next grows with level');
+  ok(typeof BData.MAXLV === 'number' && BData.MAXLV >= 50, 'level cap defined');
+  // a Lv9 monster fed several kills levels up
+  { let lvl = 9, exp = 0, ups = 0;
+    for (let k = 0; k < 8; k++) { exp += BData.expReward(13);
+      while (lvl < BData.MAXLV && exp >= BData.expToNext(lvl)) { exp -= BData.expToNext(lvl); lvl++; ups++; } }
+    ok(ups >= 1 && lvl > 9, 'shared exp from kills levels a monster up (Lv9 -> Lv' + lvl + ')'); }
 
   const mkRng = (seq) => { let i = 0; return () => (i < seq.length ? seq[i++] : seq[seq.length - 1]); };
 
