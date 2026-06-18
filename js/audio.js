@@ -17,7 +17,7 @@ const Sfx = (() => {
     master.gain.value = muted ? 0 : 0.45;
     master.connect(ctx.destination);
     musicGain = ctx.createGain();      // battle music sits under the SFX
-    musicGain.gain.value = 0.42;
+    musicGain.gain.value = 0.34;       // headroom for the dense, multi-layer mix
     musicGain.connect(master);
     // 1 second of white noise, reused by every noise-based effect
     const n = ctx.sampleRate;
@@ -179,36 +179,70 @@ const Sfx = (() => {
     osc.connect(g); g.connect(musicGain);
     osc.start(when); osc.stop(when + dur + 0.05);
   }
-  // 4-bar loops: chord pad (per bar), bass (per bar) + sub octave, lead (per beat)
+  function mnoise(when, f0, f1, dur, vol, ftype, q) {
+    if (!ctx) return;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = ftype || 'highpass';
+    f.frequency.setValueAtTime(f0, when); if (f1) f.frequency.exponentialRampToValueAtTime(Math.max(10, f1), when + dur);
+    f.Q.value = q || 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(vol, when + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    src.connect(f); f.connect(g); g.connect(musicGain);
+    src.start(when); src.stop(when + dur + 0.05);
+  }
+  function mkick(when) {
+    if (!ctx) return;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(155, when); o.frequency.exponentialRampToValueAtTime(45, when + 0.11);
+    g.gain.setValueAtTime(0.0001, when); g.gain.exponentialRampToValueAtTime(0.55, when + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+    o.connect(g); g.connect(musicGain); o.start(when); o.stop(when + 0.2);
+  }
+  const msnare = (when) => { mnoise(when, 1900, 800, 0.14, 0.26, 'highpass', 0.6); mnoise(when, 380, 200, 0.1, 0.12, 'bandpass', 1.2); };
+  const mhat = (when, accent) => mnoise(when, 7200, 9000, accent ? 0.05 : 0.03, accent ? 0.12 : 0.07, 'highpass', 0.8);
+
+  // 4-bar loops, scheduled in 8th-notes (32 steps): drums + bass + sub +
+  // chord pad + arpeggio + a harmonized lead. Faster + denser than before.
   const TRACKS = {
     battle: { // heroic / majestic — Am F C G
-      bpm: 142,
+      bpm: 170,
       chords: [[57, 60, 64], [53, 57, 60], [52, 55, 60], [55, 59, 62]],
       bass: [45, 41, 48, 43],
-      lead: [69, 0, 72, 76, 74, 0, 72, 69, 67, 72, 76, 0, 74, 71, 67, 62],
+      lead: [69, 71, 72, 76, 74, 72, 69, 67, 72, 74, 77, 74, 72, 69, 65, 64,
+             67, 72, 76, 79, 76, 72, 67, 64, 67, 71, 74, 79, 78, 74, 71, 67],
     },
     boss: { // dark / intense — Dm Bb Gm A(maj for tension)
-      bpm: 154,
+      bpm: 186,
       chords: [[50, 53, 57], [46, 50, 53], [55, 58, 62], [57, 61, 64]],
       bass: [38, 34, 43, 45],
-      lead: [62, 0, 65, 68, 70, 0, 69, 65, 67, 70, 74, 0, 73, 0, 69, 64],
+      lead: [62, 65, 69, 74, 73, 69, 65, 62, 70, 74, 77, 74, 70, 69, 65, 62,
+             67, 70, 74, 79, 77, 74, 70, 67, 69, 73, 76, 81, 80, 76, 73, 69],
     },
   };
   function scheduleMusic() {
     music.timer = null;
     if (!music.on || !ctx) return;
     const tr = TRACKS[music.track]; if (!tr) return;
-    const spb = 60 / tr.bpm;
+    const spb = 60 / tr.bpm, sp8 = spb / 2; // step = one 8th note
     while (music.nextTime < ctx.currentTime + 0.25) {
-      const beat = music.step % 16, bar = (beat / 4) | 0;
-      mnote(tr.bass[bar], music.nextTime, spb * 0.95, 0.4, 'triangle');
-      mnote(tr.bass[bar] - 12, music.nextTime, spb * 0.95, 0.18, 'sine');
-      if (beat % 4 === 0) for (const c of tr.chords[bar]) mnote(c, music.nextTime, spb * 3.7, 0.12, 'triangle');
-      if (tr.lead[beat]) mnote(tr.lead[beat], music.nextTime, spb * 0.85, 0.32, 'sawtooth');
-      music.nextTime += spb;
+      const step = music.step % 32, bar = (step / 8) | 0, inBar = step % 8;
+      const w = music.nextTime;
+      // driving drum kit
+      if (inBar === 0 || inBar === 4 || inBar === 7) mkick(w);
+      if (inBar === 2 || inBar === 6) msnare(w);
+      mhat(w, inBar % 2 === 0);
+      // bass pulse (every quarter) + sub octave
+      if (inBar % 2 === 0) { mnote(tr.bass[bar], w, sp8 * 1.4, 0.4, 'triangle'); mnote(tr.bass[bar] - 12, w, sp8 * 1.4, 0.2, 'sine'); }
+      // chord pad held across the bar
+      if (inBar === 0) for (const c of tr.chords[bar]) mnote(c, w, spb * 3.6, 0.09, 'triangle');
+      // shimmering arpeggio (cycles the bar's chord up an octave)
+      const ac = tr.chords[bar]; mnote(ac[step % ac.length] + 12, w, sp8 * 0.7, 0.07, 'square');
+      // harmonized 8th-note lead (brassy saw + an octave sparkle)
+      const ln = tr.lead[step];
+      if (ln) { mnote(ln, w, sp8 * 0.95, 0.3, 'sawtooth'); mnote(ln + 12, w, sp8 * 0.95, 0.09, 'square'); }
+      music.nextTime += sp8;
       music.step++;
     }
-    music.timer = setTimeout(scheduleMusic, 60);
+    music.timer = setTimeout(scheduleMusic, 50);
   }
   function startMusic(track) {
     pendingTrack = track;
