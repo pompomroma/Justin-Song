@@ -3383,7 +3383,7 @@ const Battle = (() => {
       Fx.hitstop(85);
       Fx.slowmo(300, 0.4);
       Fx.flash(75, 0.8, tint);
-      Fx.pulseLight(tgt, tint, 3.0, 260, 7);
+      Fx.pulseLight(chest(v), tint, 3.0, 260, 7);
       Fx.addTrauma(0.5);
       v.flashT = 0.34;
       Fx.burst(chest(v), { n: 32, speed: 3.2, colors: fx, life: 0.55, g: -3 });

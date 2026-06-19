@@ -401,5 +401,29 @@ function attackCycle(sb) {
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
+// ----- run 12: beam-type move (idx 2) — guards the kindBeam crash regression
+{
+  const sb = makeSandbox('#battle'); // single MAGMULE foe; PIXLIT idx2 = Mindbeam (beam)
+  vm.runInContext(`(${function () {
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 50 : 2; return r; };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  const beamRound = () => { // top -> Attack -> moves, then pick the bottom-left move (idx 2)
+    sb.__pump(30);
+    press(sb, 'ArrowDown'); sb.__pump(4); press(sb, 'ArrowRight'); sb.__pump(4); press(sb, 'Space'); sb.__pump(8);
+    press(sb, 'ArrowDown'); sb.__pump(4); press(sb, 'ArrowLeft'); sb.__pump(4); press(sb, 'Space'); sb.__pump(8);
+    press(sb, 'Space'); sb.__pump(6);
+  };
+  let frames = 0;
+  while (frames < 40000 && !vm.runInContext('globalThis.__battleEnd', sb)) { beamRound(); frames += 60; }
+  ok(vm.runInContext('globalThis.__battleEnd', sb) === 'win', 'beam-type move (Mindbeam) resolves to a win');
+  sb.__pump(150);
+  ok(sb.__errors.length === 0, 'no errors using a beam-type attack (kindBeam tgt fix)' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');
 process.exit(failures ? 1 : 0);
