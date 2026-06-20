@@ -50,6 +50,38 @@ procedural soundtrack** plays through battles — a heroic theme in normal
 fights and a darker, driving theme in the boss raid. All of it is
 synthesized in code (no audio files); press **M** to mute.
 
+## The opening
+
+The game boots into a **title cinematic** — an original homage to the retro
+RPG opening (original voxel art, original procedural fanfare, original
+dialogue): the protector **AEGIS** clashes with a colossal **GIANT** under an
+intense moving camera with crossing beams, lightning and slow-mo. There are
+**three intro variants**, chosen at random. Press any key (or **X** to skip)
+to reach the **title menu**: three save **slots** (New Game / Continue; **X**
+erases). A new game lets you pick a **difficulty**, then plays a first-person
+**"wake up" cutscene** (black screen, a blink reveal, the camera tilts up to
+the giant firing a beam) that swings into a **real, playable tutorial battle**
+commanding AEGIS. Win or lose, you **faint** and come to in the grove, where
+you **name yourself** on an on-screen keyboard and the story carries on. Cut
+scenes are letterboxed and the bars retract as overworld play begins; spoken
+lines play as **both voice and text**.
+
+**Difficulty (5 levels)** scales the opponent AI's *strategy* and *attack
+diversity*: **1 Rookie** (random moves) · **2 Trainer** (plays the odds) ·
+**3 Ace** (sets up, type-aware) · **4 Veteran** (conserves PP, targets
+weaknesses, **switches** bad matchups) · **5 Master** (predicts KOs and
+punishes). It also scales each foe's movepool, level and team size. A small
+**type chart** (FIRE > LEAF > PSY > VOID > FIRE; NORMAL neutral) makes
+weaknesses real — "super effective!" / "not very effective..." show in battle.
+
+**Saving:** progress is kept in **localStorage** slots (autosaved after every
+battle and on entering the grove). Press **O** in the overworld for **Options**
+— **Rename**, **Difficulty**, **Save**, and portable **save codes** (Export /
+Import a checksummed string — the offline "cloud"). An optional best-effort
+online sync (`Cloud.push/pull`) is included but **off by default** and inert
+unless you point it at your own endpoint, so the game stays zero-dependency,
+offline and `file://`-safe.
+
 ## Run it
 
 ### On Replit
@@ -101,9 +133,10 @@ modules, no fetch).
 | E / Space / Enter | Talk · confirm · advance text |
 | X / Esc | Back out of a submenu |
 | C | Open the party panel (switch allies) |
+| O | Options (overworld) — rename, difficulty, save, save codes |
 | M | Mute / unmute |
 | T | Toggle the FPS / resolution readout |
-| Mouse | Click buttons/party rows, click to advance text |
+| Mouse / Touch | Click/tap buttons, slots, the keyboard, menu options; click to advance text |
 
 **Mobile / touch:** on-screen controls appear automatically **only when you
 are not using the keyboard** — they show up the first time you touch the
@@ -133,6 +166,13 @@ FPS / resolution readout.
 
 ## Debug modes (URL hash)
 
+The game boots into the opening cinematic by default; these hashes jump past it:
+
+- `index.html#overworld` — straight into the grove (skip the opening)
+- `index.html#title` — the save-slot / difficulty title menu
+- `index.html#story` — the first-person wake cutscene
+- `index.html#tutorial` — the playable tutorial battle (AEGIS vs the GIANT)
+- `index.html#name` — the on-screen name-entry keyboard
 - `index.html#battle` — jump straight into a grove battle
 - `index.html#dungeon` — jump straight into the VORNETH boss fight
 - `index.html#viewer` — voxel model inspector (Left/Right to cycle)
@@ -149,18 +189,27 @@ node test/boot_sim.js
 ```
 
 `smoke.js` loads the pure modules in Node and checks the math, the
-voxel mesher, font glyph coverage for every battle message, damage
-formula goldens, AI behavior — and runs a 300-battle Monte-Carlo sim
-to keep the fight balanced. `boot_sim.js` boots the whole game under
-a stub DOM/WebGL, plays a full battle to completion with simulated
-key presses, and exercises the overworld, viewer and fly modes.
+voxel mesher, font glyph coverage for every battle/menu/story string,
+damage formula goldens, the **type chart + STAB**, the **5 AI tiers**
+(random → predictive KO → switch-awareness), **save-code round-trips**
+(and that cloud sync is off by default) — and runs a 300-battle
+Monte-Carlo sim to keep the fight balanced. `boot_sim.js` boots the whole
+game under a stub DOM/WebGL and plays through the **entire opening chain**
+(Intro → title menu → new game → wake cutscene → tutorial battle → faint →
+name entry → grove), a full battle to completion, a Master-difficulty
+multi-monster battle with enemy switching, plus the overworld, viewer and
+fly modes.
 
 ## Manual checklist
 
-walk the larger world → battle each trainer (REX / DALE / IVY / KORU)
-→ try each action (Attack moves, Items: Heal/Cure, Capture, Run, party
-switch with C) → enter the rift portal (swirling portal transition) →
-boss intro atop the cliff with the upward camera → knock VORNETH below
-half HP to trigger its transformation climax → defeat or capture it →
-field the captured VORNETH and use its Awaken move → loss path (black
-out) → mute (M) and stats (T) toggles.
+opening cinematic (try a few reloads for the 3 variants; **X** skips) →
+title menu (New Game on an empty slot, pick a difficulty) → wake cutscene →
+tutorial battle vs the GIANT (drop it below half HP for the enrage + its
+telegraphed Giga Beam) → faint → name yourself → grove → **O** Options
+(rename / difficulty / save / export+import a save code) → battle each
+trainer (REX / DALE / IVY / KORU) at different difficulties → each action
+(Attack, Items, Capture, Run, party switch with **C**) → the rift portal →
+boss intro atop the cliff with the upward camera → knock VORNETH below half
+HP for its transformation climax → defeat or capture it → field the captured
+VORNETH and use its Awaken move → loss path (black out) → reload and
+**Continue** the saved slot → mute (**M**) and stats (**T**) toggles.

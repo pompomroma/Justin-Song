@@ -232,6 +232,7 @@ const Input = (() => {
     KeyX: 'back', Escape: 'back', Backspace: 'back',
     KeyM: 'mute',
     KeyC: 'party',
+    KeyO: 'options',
     KeyT: 'stats',
     KeyP: 'pose',
     ShiftLeft: 'fast', ShiftRight: 'fast',
@@ -533,6 +534,12 @@ const Sfx = (() => {
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
     },
     faint:   () => tone({ f0: 600, f1: 70, dur: 0.7, vol: 0.2, type: 'square' }),
+    giantbeam: () => { // colossal sustained void beam (the giant's intro attack)
+      noise({ f0: 220, f1: 60, dur: 1.1, vol: 0.5, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 880, f1: 200, dur: 1.0, vol: 0.16, type: 'sawtooth' });
+      tone({ f0: 70, f1: 40, dur: 1.1, vol: 0.34, type: 'sine' });
+      noise({ f0: 1800, f1: 5000, dur: 0.5, vol: 0.1, ftype: 'highpass', delay: 0.12 });
+    },
     heal:    () => {
       [523, 659, 784].forEach((f, i) => tone({ f0: f, dur: 0.12, vol: 0.11, delay: i * 0.09, type: 'sine' }));
       noise({ f0: 2000, f1: 4500, dur: 0.35, vol: 0.05, ftype: 'highpass' });
@@ -569,6 +576,29 @@ const Sfx = (() => {
     ABYSSNOVA: () => { noise({ f0: 800, f1: 48, dur: 0.7, vol: 0.6, ftype: 'lowpass', q: 1.2 }); tone({ f0: 80, f1: 26, dur: 0.7, vol: 0.4, type: 'sine' }); [330, 466, 622].forEach((f, i) => tone({ f0: f, dur: 0.6, vol: 0.1, type: 'sawtooth', delay: i * 0.02 })); },
     AWAKEN: () => { tone({ f0: 120, f1: 900, dur: 0.8, vol: 0.2, type: 'sawtooth' }); tone({ f0: 60, f1: 200, dur: 0.8, vol: 0.2, type: 'sine' }); noise({ f0: 400, f1: 4000, dur: 0.8, vol: 0.12, ftype: 'bandpass', q: 1 }); },
   };
+
+  // synthesized "voice" blip — a short vowel-ish formant chirp keyed off the
+  // character, fired per-letter by the typewriter so spoken lines read as
+  // BOTH voice and text. (Real TTS is impossible offline / zero-dependency.)
+  function voice(ch) {
+    if (!ctx || !ch || ch === ' ' || ch === '\n') return;
+    const code = ch.charCodeAt(0);
+    const base = 128 + (code % 13) * 10;
+    const t0 = ctx.currentTime;
+    for (const det of [0, 5]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(base + det, t0);
+      o.frequency.exponentialRampToValueAtTime((base + det) * 1.16, t0 + 0.05);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 700 + (code % 5) * 130; f.Q.value = 6;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.078);
+      o.connect(f); f.connect(g); g.connect(master);
+      o.start(t0); o.stop(t0 + 0.1);
+    }
+  }
 
   // soft night-forest bed: filtered noise pad + scheduled cricket chirps
   function startAmbience() {
@@ -640,6 +670,20 @@ const Sfx = (() => {
       lead: [62, 65, 69, 74, 73, 69, 65, 62, 70, 74, 77, 74, 70, 69, 65, 62,
              67, 70, 74, 79, 77, 74, 70, 67, 69, 73, 76, 81, 80, 76, 73, 69],
     },
+    title: { // bright, anthemic retro-opening fanfare — C G Am F
+      bpm: 132,
+      chords: [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]],
+      bass: [36, 31, 33, 29],
+      lead: [72, 76, 79, 76, 74, 72, 71, 72, 67, 71, 74, 71, 69, 67, 66, 67,
+             69, 72, 76, 72, 74, 76, 79, 84, 83, 79, 76, 72, 74, 71, 67, 72],
+    },
+    tutorial: { // tense, driving — Am F Dm E
+      bpm: 150,
+      chords: [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]],
+      bass: [45, 41, 38, 40],
+      lead: [69, 72, 71, 69, 67, 69, 72, 74, 65, 69, 68, 65, 64, 65, 69, 72,
+             62, 65, 69, 74, 72, 69, 65, 62, 64, 68, 71, 76, 75, 71, 68, 64],
+    },
   };
   function scheduleMusic() {
     music.timer = null;
@@ -684,6 +728,7 @@ const Sfx = (() => {
     unlock,
     play: (name) => { if (ctx && FX[name]) FX[name](); },
     move: (id) => { if (ctx) (MOVEFX[id] || FX.impact)(); },
+    voice,
     startMusic, stopMusic,
     toggleMute: () => {
       muted = !muted;
@@ -1459,6 +1504,73 @@ const Models = (() => {
     return { g, colors, s: 0.13, jitter: 0.1 };
   }
 
+  // PROTECTOR (AEGIS) — a sleek guardian beast: steel-blue plated body,
+  // glowing cyan crest + maw, four strong legs, swept tail. Faces +z (the
+  // player first sees its back shielding him in the wake cutscene). ~1.6u.
+  function protector() {
+    const g = Vox.grid(18, 20, 26);
+    const C = { body: 0, body2: 1, plate: 2, glow: 3, eye: 4, claw: 5, mane: 6 };
+    const colors = pal('#2e3c54', '#3c4e6c', '#23304a', '#46e6ff', '#eafcff', '#161d2c', '#2aa6c8');
+    // four legs (author the right pair; mirrorX makes the left). front near +z
+    for (const z of [5, 18]) {
+      g.box(11, 0, z, 13, 5, z + 2, C.body2);
+      g.box(11, 0, z, 13, 0, z + 2, C.claw);
+    }
+    g.ellipsoid(9, 9.5, 13, 5.2, 4.4, 8.0, C.body);   // barrel body
+    g.ellipsoid(9, 6.5, 13, 4.4, 3.0, 7.2, C.body2);  // belly
+    g.ellipsoid(9, 9.5, 20, 4.0, 4.0, 2.2, C.plate);  // chest plate
+    g.ellipsoid(9, 9.6, 21.2, 1.5, 1.7, 1.0, C.glow); // glowing chest core
+    // neck + head forward (+z)
+    g.box(9, 9, 20, 11, 13, 23, C.body);
+    g.ellipsoid(9, 13, 23, 3.0, 2.7, 2.6, C.body);
+    g.box(9, 11, 24, 11, 13, 25, C.plate);            // muzzle
+    g.ellipsoid(9, 11.4, 25, 1.2, 0.9, 0.7, C.glow);  // glowing maw
+    g.set(11, 14, 24, C.eye);                          // right eye -> mirror
+    g.set(13, 16, 22, C.claw); g.set(13, 17, 22, C.claw); // right ear
+    // glowing crest spikes along the spine
+    for (let z = 10; z <= 22; z += 2) { g.set(9, 14, z, C.mane); g.set(9, 15, z, C.glow); }
+    // swept tail (-z) with a glowing tip
+    g.box(9, 9, 2, 10, 11, 5, C.body);
+    g.set(9, 12, 1, C.glow); g.set(9, 11, 1, C.glow);
+    g.mirrorX();
+    return { g, colors, s: 0.08, jitter: 0.06 };
+  }
+
+  // GIANT (COLOSSUS) — a colossal, majestic horned & winged beast with a
+  // blazing maw; the tutorial's overwhelming opponent. Faces +z. Built
+  // large (~4.7u — it towers; the camera tilts up at it).
+  function giant() {
+    const g = Vox.grid(30, 36, 24);
+    const C = { hide: 0, hide2: 1, plate: 2, horn: 3, eye: 4, claw: 5, wing: 6, maw: 7 };
+    const colors = pal('#3a2f5e', '#4a3c74', '#efe6ff', '#cfa63a', '#ffe27a', '#1a1330', '#2c2350', '#ffd24a');
+    g.ellipsoid(15, 18, 12, 8, 10, 6.4, C.hide);      // colossal torso
+    g.ellipsoid(15, 12, 12, 6.8, 6.6, 6.0, C.hide2);  // belly
+    g.ellipsoid(15, 17, 17.4, 3.2, 3.4, 1.4, C.plate);// chest plate
+    g.ellipsoid(15, 17, 18.0, 1.9, 2.1, 0.9, C.maw);  // blazing chest maw
+    // right wing (swept membrane, low-z behind the shoulder)
+    g.box(21, 14, 4, 29, 30, 5, C.wing);
+    g.box(23, 27, 4, 29, 33, 5, C.wing);
+    g.box(22, 9, 4, 27, 14, 5, C.wing);
+    g.set(25, 22, 5, C.maw); g.set(27, 28, 5, C.maw);
+    // right arm + claw
+    g.ellipsoid(22, 22, 12, 3.8, 3.8, 3.8, C.hide);
+    g.box(23, 9, 11, 26, 22, 14, C.hide);
+    g.box(24, 5, 11, 26, 8, 15, C.claw);
+    g.set(26, 4, 11, C.claw); g.set(26, 4, 15, C.claw);
+    g.box(18, 0, 11, 22, 7, 15, C.hide2);             // right leg
+    g.box(18, 0, 15, 22, 0, 17, C.claw);
+    g.ellipsoid(15, 26, 14, 4.4, 4.0, 4.2, C.hide);   // head
+    g.box(15, 24, 17, 17, 26, 18, C.plate);           // jaw / muzzle (right)
+    g.ellipsoid(15, 25, 18.2, 1.6, 1.2, 0.8, C.maw);  // glowing maw
+    g.set(17, 27, 18, C.eye);                          // right eye -> mirror
+    g.box(15, 30, 13, 15, 34, 13, C.horn);            // crown of horns
+    g.box(18, 29, 13, 18, 33, 13, C.horn);
+    g.box(21, 28, 13, 21, 31, 13, C.horn);
+    for (let y = 8; y < 26; y += 2) g.set(15, y, 18, C.maw); // spine glow
+    g.mirrorX();
+    return { g, colors, s: 0.13, jitter: 0.09 };
+  }
+
   // obsidian spire — jagged dungeon scatter
   function spire() {
     const g = Vox.grid(10, 20, 10);
@@ -1535,7 +1647,7 @@ const Models = (() => {
 
   const BUILDERS = {
     pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
-    vorneth, vorneth_x, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
+    vorneth, vorneth_x, protector, giant, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,
@@ -2058,10 +2170,11 @@ const UI = (() => {
   // ---- message box / typewriter ----
 
   function typewriter() {
-    let lines = [], shown = 0, total = 0, time = 0, blip = 0;
+    let lines = [], shown = 0, total = 0, time = 0, blip = 0, voiced = false, joined = '';
     return {
-      set(text, maxWidth) {
+      set(text, maxWidth, opts) {
         maxWidth = maxWidth || 860;
+        voiced = !!(opts && opts.voiced);
         lines = [];
         for (const para0 of String(text).split('\n')) {
           let line = '';
@@ -2072,7 +2185,8 @@ const UI = (() => {
           }
           lines.push(line);
         }
-        total = lines.join('\n').length;
+        joined = lines.join('\n');
+        total = joined.length;
         shown = 0; time = 0;
       },
       update(dt) {
@@ -2080,7 +2194,9 @@ const UI = (() => {
         time += dt * 1000;
         while (time >= 18 && shown < total) {
           time -= 18; shown++;
-          if ((++blip % 3) === 0 && typeof Sfx !== 'undefined') Sfx.play('blip');
+          if (typeof Sfx === 'undefined') continue;
+          if (voiced) { if (shown % 2 === 0) Sfx.voice(joined[shown - 1]); }   // spoken line
+          else if ((++blip % 3) === 0) Sfx.play('blip');
         }
       },
       skip() { shown = total; },
@@ -2117,6 +2233,17 @@ const UI = (() => {
     }
   }
 
+  // big centered cutscene caption (sits in the cinematic safe band, clear of
+  // the letterbox bars) — used for spoken story lines.
+  function cutsceneText(ctx, tw, t, waiting) {
+    const lines = tw.visibleLines();
+    const y0 = 252 - (Math.max(1, lines.length) - 1) * 17;
+    for (let i = 0; i < lines.length; i++)
+      PFont.drawC(ctx, lines[i], 480, y0 + i * 34, { scale: 3, color: '#ffffff', outline: '#0a0a14' });
+    if (waiting && tw.done() && Math.sin(t * 7) > 0)
+      PFont.drawC(ctx, '▼', 480, y0 + lines.length * 34 + 6, { scale: 2, color: '#f8c838' });
+  }
+
   function prompt(ctx, text) {
     const w = PFont.width(text, 2) + 36;
     const x = 480 - w / 2;
@@ -2147,7 +2274,7 @@ const UI = (() => {
     para, panel, bar, ball, tealBall, hpColor,
     redFrame, emblem, moveGrid, actionGrid, partyPanel, partyHint,
     enemyPanel, playerPanel, playerParty,
-    typewriter, msgBox, prompt, hint, locationCard,
+    typewriter, msgBox, cutsceneText, prompt, hint, locationCard,
   };
 })();
 </script>
@@ -2675,21 +2802,27 @@ const Cam = (() => {
 const BData = (() => {
 
   const SPECIES = {
-    PIXLIT:   { name: 'PIXLIT',   base: { hp: 40, atk: 75, def: 60, spe: 40 },
+    PIXLIT:   { name: 'PIXLIT',   type: 'PSY',  base: { hp: 40, atk: 75, def: 60, spe: 40 },
                 moves: ['TACKLE', 'GROWL', 'MINDBEAM', 'PSYBLAST'],
                 ppInit: [35, 30, 16, 20] }, // worn from the journey (matches the reference shot)
-    THORNLET: { name: 'THORNLET', base: { hp: 45, atk: 55, def: 65, spe: 35 },
+    THORNLET: { name: 'THORNLET', type: 'LEAF', base: { hp: 45, atk: 55, def: 65, spe: 35 },
                 moves: ['TACKLE', 'GROWL', 'LEAFRAZOR', 'SEEDBURST'] },
-    EMBERIK:  { name: 'EMBERIK',  base: { hp: 42, atk: 68, def: 48, spe: 50 },
+    EMBERIK:  { name: 'EMBERIK',  type: 'FIRE', base: { hp: 42, atk: 68, def: 48, spe: 50 },
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
-    MAGMULE:  { name: 'MAGMULE',  base: { hp: 52, atk: 32, def: 42, spe: 35 },
+    MAGMULE:  { name: 'MAGMULE',  type: 'FIRE', base: { hp: 52, atk: 32, def: 42, spe: 35 },
                 moves: ['TACKLE', 'CINDER', 'GROWL'] },
     // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
     // into its true form mid-battle; statsFor() resolves each form's block.
-    VORNETH:   { name: 'VORNETH', base: { hp: 80, atk: 60, def: 60, spe: 50 },
+    VORNETH:   { name: 'VORNETH', type: 'VOID', base: { hp: 80, atk: 60, def: 60, spe: 50 },
                  moves: ['TACKLE', 'VOIDLANCE', 'DREADWAVE', 'AWAKEN'], form2: 'VORNETH_X', boss: true },
-    VORNETH_X: { name: 'VORNETH-X', base: { hp: 80, atk: 88, def: 74, spe: 72 },
+    VORNETH_X: { name: 'VORNETH-X', type: 'VOID', base: { hp: 80, atk: 88, def: 74, spe: 72 },
                  moves: ['VOIDLANCE', 'ABYSSNOVA', 'DREADWAVE', 'VOIDSTORM'], boss: true },
+    // The opening tutorial: AEGIS (the protector the player commands) is PSY,
+    // strong against the void GIANT (COLOSSUS) it shields the player from.
+    PROTECTOR: { name: 'AEGIS', type: 'PSY', base: { hp: 70, atk: 80, def: 70, spe: 64 },
+                 moves: ['TACKLE', 'MINDBEAM', 'PSYBLAST', 'GROWL'] },
+    GIANT:     { name: 'COLOSSUS', type: 'VOID', base: { hp: 130, atk: 70, def: 82, spe: 38 },
+                 moves: ['STOMP', 'ROAR', 'GIANTBEAM', 'GNOVA'], giant: true },
   };
 
   /* anim kinds (battle.js dispatch): dash | rings | beam | orb | volley.
@@ -2722,6 +2855,41 @@ const BData = (() => {
     VOIDSTORM: { name: 'Void Storm', type: 'VOID', power: 80, acc: 90,  pp: 10,
                  anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.95, 0.45, 1]] },
     AWAKEN:    { name: 'Awaken', type: 'VOID', power: 0, acc: 100, pp: 5, effect: 'transform' },
+    // tutorial GIANT moves — heavy slam, dread roar (debuff), and two
+    // telegraphed "charged" specials unlocked when it enrages.
+    STOMP:     { name: 'Stomp',      type: 'NORMAL', power: 55, acc: 95,  pp: 20,
+                 anim: 'dash',     fx: [W, [0.8, 0.7, 0.5], [0.5, 0.45, 0.4]] },
+    ROAR:      { name: 'Dread Roar', type: 'NORMAL', power: 0, acc: 100, pp: 20, effect: 'atkDown',
+                 anim: 'rings',    fx: [W, [1, 0.7, 0.4]] },
+    GIANTBEAM: { name: 'Giga Beam', type: 'VOID',   power: 85, acc: 100, pp: 5, telegraph: true,
+                 anim: 'voidbeam', fx: [[1, 0.88, 0.4], W, [0.7, 0.5, 1]] },
+    GNOVA:     { name: 'Ruin Nova', type: 'VOID',   power: 95, acc: 90,  pp: 5, telegraph: true,
+                 anim: 'voidnova', fx: [[1, 0.8, 0.4], [1, 0.5, 0.9], W, [0.5, 0.15, 0.7]] },
+  };
+
+  /* Type effectiveness — a small balanced 4-cycle (NORMAL is neutral both
+     ways): FIRE>LEAF>PSY>VOID>FIRE. typeEff(undefined, ...) is 1, so damage
+     goldens computed without species types are unchanged. */
+  const TYPE_CHART = {
+    FIRE: { LEAF: 2, VOID: 0.5 },
+    LEAF: { PSY: 2, FIRE: 0.5 },
+    PSY:  { VOID: 2, LEAF: 0.5 },
+    VOID: { FIRE: 2, PSY: 0.5 },
+  };
+  function typeEff(atkType, defType) {
+    if (!atkType || !defType) return 1;
+    const row = TYPE_CHART[atkType];
+    return (row && row[defType]) || 1;
+  }
+
+  /* Difficulty — 5 levels scaling opponent strategy (aiPick tier) AND
+     attack-pattern diversity (movepool breadth / level / team size). */
+  const DIFFICULTY = {
+    1: { id: 1, name: 'Rookie',  blurb: 'Foes strike at random.',        moves: 2, levelDelta: -3, teamMax: 1 },
+    2: { id: 2, name: 'Trainer', blurb: 'Foes play the odds.',           moves: 2, levelDelta: -1, teamMax: 2 },
+    3: { id: 3, name: 'Ace',     blurb: 'Foes set up and press.',        moves: 3, levelDelta: 0,  teamMax: 3 },
+    4: { id: 4, name: 'Veteran', blurb: 'Foes hit weak spots, switch.',  moves: 4, levelDelta: 1,  teamMax: 3 },
+    5: { id: 5, name: 'Master',  blurb: 'Foes predict and punish.',      moves: 4, levelDelta: 2,  teamMax: 3 },
   };
 
   // battle items: 3 charges of each per battle
@@ -2745,19 +2913,33 @@ const BData = (() => {
     return Math.max(2, 2 + s) / Math.max(2, 2 - s);
   };
 
-  /* att/def: {level, atk, def, atkStage, defStage}. move: MOVES entry.
-     rng: () => [0,1). Type effectiveness is x1 for every pairing in this
-     prototype (hook kept for expansion). */
+  /* att/def: {level, atk, def, atkStage, defStage, type}. move: MOVES entry.
+     rng: () => [0,1). att.type drives STAB (x1.5); def.type drives type
+     effectiveness via TYPE_CHART. Both default to neutral (x1) when a type
+     is absent, so damage goldens computed without types are unchanged. */
   function damage(att, def, move, rng) {
     if (!move.power) return { dmg: 0, crit: false, miss: false };
     if (rng() * 100 >= move.acc) return { dmg: 0, crit: false, miss: true };
     const A = att.atk * stageMul(att.atkStage || 0);
     const D = Math.max(1, def.def * stageMul(def.defStage || 0));
     const crit = rng() < 1 / 16;
-    const eff = 1; // type chart hook
+    const eff = typeEff(move.type, def.type);
+    const stab = (att.type && move.type === att.type) ? 1.5 : 1;
     let base = Math.floor(Math.floor(Math.floor(2 * att.level / 5 + 2) * move.power * A / D) / 50) + 2;
-    base = base * (crit ? 1.5 : 1) * eff * (0.85 + rng() * 0.15);
-    return { dmg: Math.max(1, Math.floor(base)), crit, miss: false };
+    base = base * (crit ? 1.5 : 1) * eff * stab * (0.85 + rng() * 0.15);
+    return { dmg: Math.max(1, Math.floor(base)), crit, miss: false, eff };
+  }
+
+  // mean damage estimate (no rng / no crit) — used by the predictive AI tier
+  // to spot a guaranteed KO or the best expected-damage line.
+  function estimateDamage(self, foe, move) {
+    if (!move.power) return 0;
+    const A = self.atk * stageMul(self.atkStage || 0);
+    const D = Math.max(1, foe.def * stageMul(foe.defStage || 0));
+    const eff = typeEff(move.type, foe.type);
+    const stab = (self.type && move.type === self.type) ? 1.5 : 1;
+    const base = Math.floor(Math.floor(Math.floor(2 * self.level / 5 + 2) * move.power * A / D) / 50) + 2;
+    return base * eff * stab * 0.925;
   }
 
   // EXP / leveling. Every party member gains the SAME reward (exp share);
@@ -2774,29 +2956,105 @@ const BData = (() => {
     return M3.clamp(c, isBoss ? 0.03 : 0.05, isBoss ? 0.6 : 0.95);
   };
 
+  const usable = (id, ai) => {
+    const mv = MOVES[id];
+    return !!mv && (ai.pp[id] || 0) > 0 && mv.effect !== 'transform';
+  };
+
   /* enemy move choice over its OWN current moveset (works for any species
-     and either boss form). ai: {atkStage, foeHpFrac, pp: {moveId: n}}.
-     Transform moves are never AI-picked — boss phase changes are forced by
-     an HP threshold in battle.js. */
+     and either boss form). ai: {tier, atkStage, foeHpFrac, pp, self, foe}.
+     tier (1..5) scales strategic depth; tier === undefined keeps the legacy
+     weighting (== tier 2) so existing callers are unchanged. Transform moves
+     are never AI-picked — boss phase changes are forced by an HP threshold. */
   function aiPick(moves, ai, rng) {
+    const tier = ai.tier;
+    const pool = moves.filter((id) => usable(id, ai));
+    if (!pool.length) return moves[0];
+
+    // Tier 1 (Rookie): uniform-random among damaging moves (else any usable)
+    if (tier === 1) {
+      const dmg = pool.filter((id) => MOVES[id].power > 0);
+      const src = dmg.length ? dmg : pool;
+      return src[Math.floor(rng() * src.length)];
+    }
+
+    // Tier 5 (Master): predictive — take a guaranteed KO, else best EV; set
+    // up only when safe.
+    if (tier === 5 && ai.self && ai.foe) {
+      let best = null, bestDmg = -1;
+      for (const id of pool) {
+        if (!MOVES[id].power) continue;
+        const d = estimateDamage(ai.self, ai.foe, MOVES[id]);
+        if (d > bestDmg) { bestDmg = d; best = id; }
+      }
+      if (best) {
+        if (bestDmg >= ai.foe.hp) return best; // lethal — take it now
+        const setup = pool.find((id) => MOVES[id].effect === 'atkDown');
+        if (setup && ai.foe.hp > ai.foe.maxHp * 0.6 && (ai.atkStage || 0) > -1 && rng() < 0.5) return setup;
+        return best;
+      }
+    }
+
+    // Tiers 2/3/4: weighted selection with escalating smarts.
     const w = [];
-    for (const id of moves) {
+    for (const id of pool) {
       const mv = MOVES[id];
-      if (!mv || (ai.pp[id] || 0) <= 0 || mv.effect === 'transform') continue;
       let weight;
-      if (mv.effect === 'atkDown') weight = (ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.22;
-      else weight = 0.4 + (mv.power || 0) / 220; // favor stronger moves
+      if (mv.effect === 'atkDown') {
+        weight = (tier >= 3)
+          ? ((ai.foeHpFrac > 0.6 && (ai.atkStage || 0) > -1) ? 0.6 : 0) // set up only while the foe is healthy
+          : ((ai.atkStage <= -6 || ai.foeHpFrac < 0.25) ? 0 : 0.22);    // legacy gate
+      } else {
+        weight = 0.4 + (mv.power || 0) / 220; // favor stronger moves
+        if (tier >= 3 && ai.foe) {            // STAB / type awareness
+          weight *= typeEff(mv.type, ai.foe.type);
+          if (ai.self && mv.type === ai.self.type) weight *= 1.3;
+        }
+        if (tier >= 4 && (ai.pp[id] || 0) <= 1 && ai.foeHpFrac > 0.5) weight *= 0.4; // conserve a low-PP nuke
+      }
       if (weight > 0) w.push([id, weight]);
     }
-    if (!w.length) {
-      for (const id of moves) if ((ai.pp[id] || 0) > 0 && MOVES[id] && MOVES[id].effect !== 'transform') return id;
-      return moves[0];
-    }
-    let total = 0;
-    for (const [, weight] of w) total += weight;
+    if (!w.length) return pool[0];
+    let total = 0; for (const [, x] of w) total += x;
     let roll = rng() * total;
-    for (const [id, weight] of w) { roll -= weight; if (roll <= 0) return id; }
+    for (const [id, x] of w) { roll -= x; if (roll <= 0) return id; }
     return w[w.length - 1][0];
+  }
+
+  // trim a species' moveset for low difficulties (damaging moves first, then
+  // status) so lower tiers field less attack-pattern diversity.
+  function enemyMovepool(moves, n) {
+    const dmg = [], status = [];
+    for (const id of moves) {
+      const mv = MOVES[id];
+      if (!mv || mv.effect === 'transform') continue;
+      (mv.power > 0 ? dmg : status).push(id);
+    }
+    const ordered = dmg.concat(status);
+    return ordered.slice(0, Math.max(1, Math.min(n, ordered.length)));
+  }
+
+  // matchup quality of selfType attacking/defending foeType (>1 favorable)
+  function matchupScore(selfType, foeType) {
+    return typeEff(selfType, foeType) / Math.max(0.5, typeEff(foeType, selfType));
+  }
+
+  /* tiers 4/5 only: should the active enemy pivot to a better-matched bench
+     mon? self:{type,hpFrac}, foe:{type}, bench:[{idx,type,alive}]. Returns a
+     bench index or -1. */
+  function aiShouldSwitch(self, foe, bench, tier, rng) {
+    if (tier < 4 || !bench || !bench.length) return -1;
+    if (self.hpFrac < 0.35) return -1;          // too risky to pivot when low
+    const cur = matchupScore(self.type, foe.type);
+    if (cur >= 1) return -1;                     // already neutral/winning
+    let best = -1, bestScore = cur;
+    for (const b of bench) {
+      if (!b.alive) continue;
+      const s = matchupScore(b.type, foe.type);
+      if (s > bestScore) { bestScore = s; best = b.idx; }
+    }
+    if (best < 0) return -1;
+    return rng() < (tier >= 5 ? 0.85 : 0.55) ? best : -1;
   }
 
   const MSG = {
@@ -2807,6 +3065,8 @@ const BData = (() => {
     used: '{A} used {M}!',
     miss: "{A}'s attack missed!",
     crit: 'A critical hit!',
+    superEff: "It's super effective!",
+    resist: "It's not very effective...",
     atkFell: "{A}'s Attack fell!",
     atkFloor: "{A}'s Attack won't go any lower!",
     noPp: "There's no PP left for this move!",
@@ -2837,6 +3097,20 @@ const BData = (() => {
     bossWin2: 'You drove VORNETH back into the void!',
     transform1: '{A} is convulsing with dark power!',
     transform2: '{A} awakened into {B}!',
+    // opening tutorial (the giant, COLOSSUS)
+    giantAppear: 'A colossal shape tears through the dark!',
+    giantReveal: 'COLOSSUS towers over you, eyes ablaze!',
+    giantEnrage: '{A} roars - its ruinous power surges!',
+    giantCharge: '{A} is gathering ruinous power!',
+    foeRecall: '{T} pulled back {A}!',
+    // overworld options / saves
+    saved: 'Game saved!',
+    codeCopied: 'Save code copied!',
+    codePasted: 'Save code loaded!',
+    codeBad: 'That code was not valid.',
+    cloudOff: 'Cloud sync is off.',
+    cloudPushed: 'Synced to cloud.',
+    cloudPulled: 'Pulled from cloud.',
   };
 
   const fmt = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k]) !== undefined ? vars[k] : '{' + k + '}');
@@ -2868,8 +3142,162 @@ const BData = (() => {
     portalDone: ['The rift is silent now. Only embers drift through it.'],
   };
 
-  return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, captureChance, aiPick,
-           MAXLV, expReward, expToNext, MSG, fmt, DIALOGUE };
+  /* opening-sequence monologue + UI copy. Player lines are voiced by the
+     typewriter AND shown as text. ASCII only (no ellipsis/curly glyphs); the
+     name beat is built by concatenation so no '{}' reaches the pixel font. */
+  const STORY = {
+    title: 'GROVE CLASH',
+    subtitle: 'A VOXEL SAGA',
+    pressStart: 'Press any key',
+    skipHint: 'X: Skip',
+    wakeWhere: 'where am I.....',
+    wakeHelp: 'there is no time for this, I better help that guy',
+    faintAgain: "Man... I fainted again..... 'guess I should find my way out of this place first, I wonder if the big guy is ok.....",
+    namePrompt: 'What should they call you?',
+    nameBeatPre: 'So... ',
+    nameBeatPost: '. That feels right.',
+  };
+
+  return { SPECIES, MOVES, ITEMS, statsFor, stageMul, damage, estimateDamage,
+           captureChance, aiPick, enemyMovepool, aiShouldSwitch, typeEff,
+           DIFFICULTY, MAXLV, expReward, expToNext, MSG, STORY, fmt, DIALOGUE };
+})();
+</script>
+<script>
+/* Grove Clash — js/save.js
+   Save: localStorage-backed save slots + offline, portable "save codes"
+   (checksummed Base64 — the file://-safe, zero-dependency "cloud").
+   Cloud: an OPTIONAL best-effort over-the-network sync, feature-detected
+   and OFF by default, so file://, offline play and the Node tests are all
+   unaffected. Pure/Node-safe: every storage/network access is guarded. */
+const Save = (() => {
+  const PREFIX = 'groveclash.slot';
+  const VER = 'GC1';
+
+  function ls() {
+    try { return (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { return null; } // some browsers throw on access when blocked
+  }
+
+  // compact on-disk form (short keys) <-> live save shape
+  function compact(s) {
+    return {
+      v: 1, name: s.name || '', difficulty: s.difficulty || 3,
+      party: (s.party || []).map((m) => ({ s: m.species, l: m.level, h: m.hp, e: m.exp || 0 })),
+      npcs: s.npcs || {}, bossBeaten: !!s.bossBeaten, bossCaptured: !!s.bossCaptured,
+      battles: s.battles || 0,
+    };
+  }
+  function expand(o) {
+    return {
+      name: o.name || '', difficulty: o.difficulty || 3,
+      party: (o.party || []).map((m) => ({
+        species: m.s, level: m.l, hp: (m.h === undefined ? null : m.h), exp: m.e || 0,
+      })),
+      npcs: o.npcs || {}, bossBeaten: !!o.bossBeaten, bossCaptured: !!o.bossCaptured,
+      battles: o.battles || 0,
+    };
+  }
+
+  const serialize = (s) => JSON.stringify(compact(s));
+
+  function write(slot, s) {
+    const store = ls(); if (!store) return false;
+    try { store.setItem(PREFIX + slot, serialize(s)); return true; } catch (e) { return false; }
+  }
+  function read(slot) {
+    const store = ls(); if (!store) return null;
+    try { const v = store.getItem(PREFIX + slot); return v ? expand(JSON.parse(v)) : null; }
+    catch (e) { return null; }
+  }
+  function clear(slot) {
+    const store = ls(); if (!store) return;
+    try { store.removeItem(PREFIX + slot); } catch (e) { /* ignore */ }
+  }
+  function summary(slot) {
+    const s = read(slot); if (!s) return null;
+    return { name: s.name, difficulty: s.difficulty,
+             levels: s.party.map((p) => p.level), party: s.party.map((p) => p.species) };
+  }
+
+  // ---- offline save codes (pure string work; works everywhere) ----
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function b64enc(str) {
+    let out = '', i = 0;
+    while (i < str.length) {
+      const c0 = str.charCodeAt(i++);
+      const c1 = i < str.length ? str.charCodeAt(i++) : NaN;
+      const c2 = i < str.length ? str.charCodeAt(i++) : NaN;
+      const e0 = c0 >> 2;
+      const e1 = ((c0 & 3) << 4) | (isNaN(c1) ? 0 : c1 >> 4);
+      const e2 = isNaN(c1) ? 64 : (((c1 & 15) << 2) | (isNaN(c2) ? 0 : c2 >> 6));
+      const e3 = isNaN(c2) ? 64 : (c2 & 63);
+      out += B64[e0] + B64[e1] + (e2 === 64 ? '=' : B64[e2]) + (e3 === 64 ? '=' : B64[e3]);
+    }
+    return out;
+  }
+  function b64dec(str) {
+    let out = '', i = 0;
+    str = String(str).replace(/[^A-Za-z0-9+/=]/g, '');
+    while (i < str.length) {
+      const d0 = B64.indexOf(str[i++]), d1 = B64.indexOf(str[i++]);
+      const d2 = B64.indexOf(str[i++]), d3 = B64.indexOf(str[i++]);
+      if (d0 < 0 || d1 < 0) break;
+      out += String.fromCharCode((d0 << 2) | (d1 >> 4));
+      if (d2 !== 64 && d2 >= 0) out += String.fromCharCode(((d1 & 15) << 4) | (d2 >> 2));
+      if (d3 !== 64 && d3 >= 0) out += String.fromCharCode(((d2 & 3) << 6) | d3);
+    }
+    return out;
+  }
+  function checksum(str) { // Adler-32
+    let a = 1, b = 0;
+    for (let i = 0; i < str.length; i++) { a = (a + str.charCodeAt(i)) % 65521; b = (b + a) % 65521; }
+    return (((b << 16) | a) >>> 0).toString(36);
+  }
+  function exportCode(s) {
+    const json = serialize(s);
+    return VER + '.' + checksum(json) + '.' + b64enc(json);
+  }
+  function importCode(code) {
+    try {
+      const parts = String(code).trim().split('.');
+      if (parts.length !== 3 || parts[0] !== VER) return null;
+      const json = b64dec(parts[2]);
+      if (checksum(json) !== parts[1]) return null;
+      return expand(JSON.parse(json));
+    } catch (e) { return null; }
+  }
+
+  return { serialize, compact, expand, write, read, clear, summary, exportCode, importCode };
+})();
+
+/* Best-effort online sync. OFF until Cloud.configure(endpoint) is called with
+   a URL; even then every call is guarded so a missing fetch / blocked network
+   / bad response silently degrades to local. No backend ships with the game —
+   point it at your own. */
+const Cloud = (() => {
+  let endpoint = null;
+  const configure = (url) => { endpoint = url || null; };
+  const available = () => !!endpoint && typeof fetch === 'function';
+
+  function push(code, s) {
+    if (!available()) return Promise.resolve(false);
+    try {
+      return fetch(endpoint + '/' + encodeURIComponent(code),
+                   { method: 'PUT', body: Save.exportCode(s) })
+        .then((r) => !!(r && r.ok)).catch(() => false);
+    } catch (e) { return Promise.resolve(false); }
+  }
+  function pull(code) {
+    if (!available()) return Promise.resolve(null);
+    try {
+      return fetch(endpoint + '/' + encodeURIComponent(code))
+        .then((r) => (r && r.ok ? r.text() : null))
+        .then((t) => (t ? Save.importCode(t) : null))
+        .catch(() => null);
+    } catch (e) { return Promise.resolve(null); }
+  }
+  return { configure, available, push, pull };
 })();
 </script>
 <script>
@@ -2921,6 +3349,18 @@ const Battle = (() => {
     ambient: [0.54, 0.46, 0.66],
   };
 
+  // Tutorial: the colossal GIANT stands far back; the camera shoots low and
+  // tilted UP at it (same towering framing as the dungeon boss).
+  const GIANT_POS = [2.4, 0, 5.6];
+  const TUTORIAL_SHOT = { pos: [-3.40, 0.95, -3.20], look: [2.10, 2.60, 4.20], fov: 60 };
+  const TUTORIAL_ENV = {
+    sky: M3.hex('#0a0a18'),
+    fog: M3.hex('#161028'), fogNear: 10, fogFar: 34,
+    lightDir: M3.normalize([], [-0.3, -0.7, -0.2]),
+    lightCol: [0.7, 0.7, 0.95],
+    ambient: [0.42, 0.44, 0.58],
+  };
+
   const SPAWN_THEMES = {
     PIXLIT:   [[1, 1, 1], [1, 0.55, 0.8], [0.7, 0.9, 1]],
     THORNLET: [[1, 1, 1], [0.55, 0.95, 0.4], [0.3, 0.75, 0.3]],
@@ -2928,6 +3368,8 @@ const Battle = (() => {
     MAGMULE:  [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
     VORNETH:  [[1, 1, 1], [0.72, 0.34, 1], [0.5, 0.12, 0.7]],
     VORNETH_X:[[1, 1, 1], [0.92, 0.4, 1], [0.6, 0.15, 0.85]],
+    PROTECTOR:[[1, 1, 1], [0.3, 0.85, 1], [0.15, 0.5, 0.8]],
+    GIANT:    [[1, 1, 1], [1, 0.85, 0.4], [0.7, 0.4, 1]],
   };
   const themeOf = (id) => SPAWN_THEMES[id] || SPAWN_THEMES.MAGMULE;
   const modelOf = (id) => id.toLowerCase();
@@ -2935,7 +3377,9 @@ const Battle = (() => {
   // ----------------------------------------------------------- state
   let staticH = null;          // merged grove scenery handle
   let dungeonH = null;         // merged dungeon scenery handle
-  let arena = 'grove';         // 'grove' | 'dungeon'
+  let tutorialH = null;        // merged tutorial scenery handle
+  let arena = 'grove';         // 'grove' | 'dungeon' | 'tutorial'
+  let tutorial = false;        // opening tutorial battle (commands the protector)
   let curEnv = ENV, curStatic = null, defShot = DEFAULT_SHOT;
   let curEnemy = null;         // descriptor passed to enter() (npcId/trainer/isBoss)
   let ashT = 0, riftT = 0;     // dungeon ambient timers
@@ -3043,13 +3487,24 @@ const Battle = (() => {
   const firstAliveIdx = () => pParty.findIndex((m, i) => i !== activeIdx && m.hp > 0);
   const enemyAlive = () => eParty.some((m) => m.hp > 0);
 
+  // active opponent stage position by arena
+  const enemyPos = () => (arena === 'dungeon' ? BOSS_POS : (arena === 'tutorial' ? GIANT_POS : M_POS));
+  // current difficulty tier (1..5); the scripted giant/boss ignore it
+  const curTier = () => ((Game.save && Game.save.difficulty) || 3);
+
   function makeEnemy(species, level, isBoss) {
     const sp = BData.SPECIES[species];
+    const isGiant = !!sp.giant;
     const stats = BData.statsFor(species, level);
-    const epp = {}; for (const id of sp.moves) epp[id] = BData.MOVES[id].pp;
+    // attack-pattern diversity scales with difficulty (story foes keep all moves)
+    let moves = sp.moves.slice();
+    if (!isBoss && !isGiant && !tutorial)
+      moves = BData.enemyMovepool(moves, (BData.DIFFICULTY[curTier()] || BData.DIFFICULTY[3]).moves);
+    const epp = {}; for (const id of sp.moves) epp[id] = BData.MOVES[id].pp; // full PP table (giant gates moves by form)
     return { id: species, baseId: species, name: sp.name, level, stats,
              hp: stats.maxHp, displayHp: stats.maxHp, drainRate: 60, atkStage: 0,
-             moves: sp.moves.slice(), epp, isBoss: !!isBoss, form: 0, threshold: 0.55 };
+             moves, epp, isBoss: !!isBoss, isGiant, enraged: false, form: 0,
+             threshold: isGiant ? 0.5 : 0.55 };
   }
 
   // camera shots ----------------------------------------------------------
@@ -3672,7 +4127,7 @@ const Battle = (() => {
         look: [u.pos[0], up * 0.92, u.pos[2]], fov: 53, ease: 'inOutCubic' },
     ]);
   }
-  const bossSwing = (s) => (arena === 'dungeon' && s === 'E');
+  const bossSwing = (s) => ((arena === 'dungeon' || arena === 'tutorial') && s === 'E');
 
   /* VOID LANCE — boss-tier beam, intensified: ground-crack charge, a
      FOUR-layer lance (halo + glow + mid + searing core), raking void
@@ -3821,9 +4276,18 @@ const Battle = (() => {
     } else eState.epp[moveId] -= 1;
     if (move.effect === 'transform') { yield* transformSeq(s); return; }
     const res = move.power
-      ? BData.damage({ level: st.level, atk: st.stats.atk, atkStage: st.atkStage },
-                     { def: os.stats.def, defStage: 0 }, move, rngBattle)
+      ? BData.damage({ level: st.level, atk: st.stats.atk, atkStage: st.atkStage, type: BData.SPECIES[st.id].type },
+                     { def: os.stats.def, defStage: 0, type: BData.SPECIES[os.id].type }, move, rngBattle)
       : { dmg: 0, crit: false, miss: rngBattle() * 100 >= move.acc };
+    // telegraphed "charged" special (the giant's wind-up tell before it fires)
+    if (move.telegraph) {
+      yield* say(BData.fmt(BData.MSG.giantCharge, { A: st.name }), { auto: true, hold: 240 });
+      Sfx.play('charge'); Sfx.play('rift');
+      Fx.pulseLight(head(sideActor(s), 0.7), [1, 0.82, 0.4], 2.4, 380, 8);
+      Fx.crackle(head(sideActor(s), 0.7), { n: 5, len: 0.9, colors: [[1, 0.85, 0.4], [1, 1, 1]] });
+      Fx.addTrauma(0.3);
+      yield 360;
+    }
     yield* say(BData.fmt(BData.MSG.used, { A: st.name, M: move.name }), { auto: true, hold: 320 });
     Sfx.move(move.id); // each attack's unique cinematic signature sound
     // electric wind-up: the attacker crackles with energy as the move begins
@@ -3844,6 +4308,9 @@ const Battle = (() => {
     } else if (res.crit) {
       yield* say(BData.MSG.crit, { auto: true });
     }
+    // type-effectiveness feedback (teaches the matchup system)
+    if (!res.miss && move.power && res.eff !== undefined && res.eff !== 1)
+      yield* say(res.eff > 1 ? BData.MSG.superEff : BData.MSG.resist, { auto: true });
   }
 
   function* faintSeq(s) {
@@ -3991,6 +4458,81 @@ const Battle = (() => {
     yield* spawnIn(a, themeOf('VORNETH'));
   }
 
+  // ---- difficulty-scaled enemy decision-making ----
+  // the giant's moveset is phase-gated: its telegraphed specials unlock only
+  // once it enrages (phase 2).
+  function enemyMoves() {
+    if (eState.isGiant)
+      return eState.form === 0 ? ['STOMP', 'ROAR'] : ['STOMP', 'GIANTBEAM', 'GNOVA', 'ROAR'];
+    return eState.moves;
+  }
+  function enemyAiCtx() {
+    const sp = BData.SPECIES;
+    return {
+      tier: eState.isGiant ? 4 : curTier(),  // the scripted giant runs a fixed tier
+      atkStage: eState.atkStage,
+      foeHpFrac: pState.hp / pState.stats.maxHp,
+      pp: eState.epp,
+      self: { level: eState.level, atk: eState.stats.atk, atkStage: eState.atkStage, type: sp[eState.id].type },
+      foe: { def: pState.stats.def, defStage: 0, type: sp[pState.id].type, hp: pState.hp, maxHp: pState.stats.maxHp },
+    };
+  }
+  const enemyPick = () => BData.aiPick(enemyMoves(), enemyAiCtx(), rngBattle);
+  const giantReady = () => eState.isGiant && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold;
+
+  // the giant's mid-fight ENRAGE (phase 2) — a roar + stat surge unlocking its
+  // telegraphed charged specials (no model swap; parallels the boss hook).
+  function* giantEnrageSeq(side) {
+    const a = sideActor(side), st = sideState(side);
+    st.form = 1; st.enraged = true;
+    st.atkStage = Math.min(6, st.atkStage + 2);
+    yield* say(BData.fmt(BData.MSG.giantEnrage, { A: st.name }), { auto: true, hold: 220 });
+    if (bossSwing(side)) camBossSwing(side);
+    Sfx.play('roar'); Sfx.play('quake');
+    Fx.flash(150, 0.9, [1, 0.7, 0.4]);
+    Fx.slowmo(520, 0.4);
+    Fx.addTrauma(0.85);
+    Fx.pulseLight(chest(a), [1, 0.72, 0.4], 4.2, 420, 11);
+    a.flashT = 0.55;
+    tw3(a.scl, [1.2, 1.2, 1.2], 300, 'outQuad', () => tw3(a.scl, [1.08, 1.08, 1.08], 400, 'outBack'));
+    Fx.ring([a.pos[0], a.pos[1] + 0.05, a.pos[2]], { r0: 0.3, r1: 3.0, n: 28, life: 0.6, colors: [[1, 0.7, 0.4], [1, 1, 1]], s: 0.09 });
+    Fx.burst(head(a, 0.7), { n: 32, speed: 3.6, colors: [[1, 0.8, 0.4], [1, 1, 1]], life: 0.7, g: -2 });
+    yield 640;
+    camDefault();
+  }
+
+  // a non-boss enemy voluntarily pivots to a better-matched bench mon (tiers 4-5)
+  function* enemySwitchSeq(to) {
+    const th = themeOf(eState.id);
+    yield* say(BData.fmt(BData.MSG.foeRecall, { T: (curEnemy && curEnemy.trainer) || 'The foe', A: eState.name }), { auto: true, hold: 140 });
+    camDefault(400);
+    Sfx.play('charge');
+    Fx.ring(chest(enemy), { r0: 1.0, r1: 0.1, n: 14, life: 0.3, colors: [th[1], [1, 1, 1]], s: 0.05 });
+    recallFx(enemy, chest(enemy), th);
+    tw3(enemy.scl, [0.02, 0.02, 0.02], 240, 'inQuad');
+    enemy.flashT = 0.4;
+    yield 280;
+    enemy.visible = false;
+    eActiveIdx = to; eState = eParty[to];
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
+    enemy.visible = false;
+    yield* say(BData.fmt(BData.MSG.sentOut, { T: (curEnemy && curEnemy.trainer) || 'The foe', M: eState.name }), { auto: true, hold: 140 });
+    yield* spawnIn(enemy, themeOf(eState.id));
+  }
+
+  // decide whether the enemy pivots this turn; returns a generator or null
+  function maybeEnemySwitch() {
+    if (eState.isBoss || eState.isGiant) return null;
+    const sp = BData.SPECIES;
+    const bench = eParty.map((m, i) => ({ idx: i, type: sp[m.id].type, alive: m.hp > 0 })).filter((b) => b.idx !== eActiveIdx);
+    const to = BData.aiShouldSwitch(
+      { type: sp[eState.id].type, hpFrac: eState.hp / eState.stats.maxHp },
+      { type: sp[pState.id].type }, bench, curTier(), rngBattle);
+    if (to < 0 || !eParty[to] || eParty[to].hp <= 0) return null;
+    return enemySwitchSeq(to);
+  }
+
   // enemy's half of a turn. Returns false if the battle ended.
   function* enemyTurn() {
     if (eState.hp <= 0) return true;
@@ -3999,8 +4541,10 @@ const Battle = (() => {
       yield* transformSeq('E');
       return true; // the transformation is the boss's action this turn
     }
-    const mv = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
-    yield* doMove('E', mv);
+    if (giantReady()) { yield* giantEnrageSeq('E'); return true; }
+    const sw = maybeEnemySwitch();
+    if (sw) { yield* sw; return true; }   // pivoting uses the enemy's turn
+    yield* doMove('E', enemyPick());
     if (pState.hp <= 0) {
       yield* faintSeq('P');
       if (othersAlive()) { yield* forcedSwitch(); return true; }
@@ -4092,9 +4636,8 @@ const Battle = (() => {
   function* sendNextEnemy() {
     eActiveIdx = eParty.findIndex((m) => m.hp > 0);
     eState = eParty[eActiveIdx];
-    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
-    enemy = actor(modelOf(eState.id), ePos, YAW_M);
-    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
     enemy.visible = false;
     yield* say(BData.fmt(BData.MSG.sentOut, { T: (curEnemy && curEnemy.trainer) || 'The foe', M: eState.name }), { auto: true, hold: 150 });
     yield* spawnIn(enemy, themeOf(eState.id));
@@ -4311,15 +4854,19 @@ const Battle = (() => {
     }
     // attack: both sides act in speed order
     const playerMove = pState.moves[action.idx];
-    const enemyMove = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
+    const enemyMove = enemyPick();
     const pFirst = pState.stats.spe === eState.stats.spe ? rngBattle() < 0.5 : pState.stats.spe > eState.stats.spe;
     const order = pFirst ? [['P', playerMove], ['E', enemyMove]] : [['E', enemyMove], ['P', playerMove]];
     for (const [s, mv] of order) {
       if (sideState(s).hp <= 0) continue;
-      // boss reacts by awakening the first time it drops below its threshold
-      if (s === 'E' && eState.isBoss && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
-        yield* transformSeq('E');
-        continue;
+      if (s === 'E') {
+        // boss reacts by awakening the first time it drops below its threshold
+        if (eState.isBoss && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
+          yield* transformSeq('E'); continue;
+        }
+        if (giantReady()) { yield* giantEnrageSeq('E'); continue; } // giant phase 2
+        const sw = maybeEnemySwitch();
+        if (sw) { yield* sw; continue; }   // pivot to a better matchup instead of attacking
       }
       yield* doMove(s, mv);
       const victim = other(s);
@@ -4339,6 +4886,7 @@ const Battle = (() => {
 
   function* introScript() {
     yield 650; // let the transition reveal finish before the first message
+    if (tutorial) { yield* introTutorial(); return; }
     if (curEnemy && curEnemy.isBoss) { yield* introBoss(); return; }
     yield* say(BData.fmt(BData.MSG.challenge, { T: curEnemy.trainer }));
     yield* say(BData.fmt(BData.MSG.sentOut, { T: curEnemy.trainer, M: eState.name }), { auto: true, hold: 120 });
@@ -4347,6 +4895,19 @@ const Battle = (() => {
     yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
     yield* spawnIn(player, themeOf(pState.id));
     yield 200;
+    backToMenu();
+  }
+
+  // tutorial entrance: the colossal giant looms in; we command the protector
+  function* introTutorial() {
+    yield* say(BData.MSG.giantAppear);
+    Cam.play([{ t: 1200, pos: TUTORIAL_SHOT.pos, look: TUTORIAL_SHOT.look, fov: TUTORIAL_SHOT.fov, ease: 'inOutCubic' }]);
+    yield* spawnInBoss(enemy);
+    yield* say(BData.MSG.giantReveal, { auto: true, hold: 220 });
+    yield 120;
+    yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
+    yield* spawnIn(player, themeOf(pState.id));
+    yield 180;
     backToMenu();
   }
 
@@ -4397,6 +4958,9 @@ const Battle = (() => {
   function endBattle(result) {
     state = 'DONE';
     mode = 'none';
+    // the opening tutorial uses a throwaway team (the protector) and always
+    // hands off to the faint cutscene — never touches the saved party.
+    if (tutorial) { Game.onTutorialBattleEnd(result); return; }
     // persist levels/EXP gained, then fully heal the whole party (incl. a
     // monster just captured) after every battle
     for (let i = 0; i < pParty.length && i < Game.save.party.length; i++) {
@@ -4497,6 +5061,33 @@ const Battle = (() => {
     dungeonH = Gfx.upload({ data, count: total });
   }
 
+  // dark dream arena for the opening tutorial: obsidian floor + a ring of spires
+  function buildTutorial() {
+    if (tutorialH) return;
+    const parts = [];
+    const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
+    const ground = Models.groundMesh({
+      radius: 15, dark: true,
+      patches: [
+        { x: P_POS[0], z: P_POS[2], rx: 1.2, rz: 0.9, rot: 0.3 },
+        { x: GIANT_POS[0], z: GIANT_POS[2], rx: 3.2, rz: 3.2, rot: 0 },
+      ],
+    });
+    const r = M3.rng(321);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + r() * 0.2, rad = 11 + r() * 3;
+      push('spire', [Math.cos(a) * rad, 0, Math.sin(a) * rad], r() * 6.3, 0.7 + r() * 1.0);
+    }
+    let total = ground.count;
+    for (const p of parts) total += p.m.count;
+    const data = new Float32Array(total * 9);
+    data.set(ground.data, 0);
+    let off = ground.count * 9;
+    for (const p of parts)
+      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    tutorialH = Gfx.upload({ data, count: total });
+  }
+
   // ----------------------------------------------------------- scene API
   function enter(params) {
     params = params || {};
@@ -4508,12 +5099,17 @@ const Battle = (() => {
 
     curEnemy = params.enemy || { species: 'MAGMULE', level: 15, trainer: 'Camper REX', npcId: 'rex' };
     arena = params.arena || 'grove';
+    tutorial = !!params.tutorial;
     if (arena === 'dungeon') { buildDungeon(); curStatic = dungeonH; curEnv = DUNGEON_ENV; defShot = DUNGEON_SHOT; }
+    else if (arena === 'tutorial') { buildTutorial(); curStatic = tutorialH; curEnv = TUTORIAL_ENV; defShot = TUTORIAL_SHOT; }
     else { buildStatic(); curStatic = staticH; curEnv = ENV; defShot = DEFAULT_SHOT; }
     ashT = 0.4; riftT = 1.2;
+    if (typeof Game.setLetterbox === 'function') Game.setLetterbox(0, 5); // NORMAL screen during battle
 
-    // build party combat states from the save
-    pParty = Game.save.party.map((m) => {
+    // build party combat states (tutorial overrides the saved party with a
+    // throwaway team — the protector AEGIS)
+    const srcParty = params.playerTeam || Game.save.party;
+    pParty = srcParty.map((m) => {
       const sp = BData.SPECIES[m.species];
       const stats = BData.statsFor(m.species, m.level);
       const hp = m.hp === null || m.hp === undefined ? stats.maxHp : M3.clamp(m.hp, 0, stats.maxHp);
@@ -4525,16 +5121,21 @@ const Battle = (() => {
     activeIdx = Math.max(0, pParty.findIndex((m) => m.hp > 0));
     pState = pParty[activeIdx];
 
-    // enemy party from the descriptor (NPCs field several monsters; boss is one)
-    const team = curEnemy.team || [{ species: curEnemy.species || 'MAGMULE', level: curEnemy.level || 15 }];
+    // enemy party from the descriptor; difficulty scales team size + levels for
+    // ordinary trainers (story foes — boss / giant — are left untouched).
+    let team = curEnemy.team || [{ species: curEnemy.species || 'MAGMULE', level: curEnemy.level || 15 }];
+    if (!curEnemy.isBoss && !tutorial) {
+      const diff = BData.DIFFICULTY[curTier()] || BData.DIFFICULTY[3];
+      team = team.slice(0, Math.max(1, diff.teamMax))
+                 .map((m) => ({ species: m.species, level: M3.clamp(m.level + diff.levelDelta, 2, BData.MAXLV) }));
+    }
     eParty = team.map((m) => makeEnemy(m.species, m.level, curEnemy.isBoss));
     eActiveIdx = 0;
     eState = eParty[0];
 
-    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
-    enemy = actor(modelOf(eState.id), ePos, YAW_M);
-    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
     rex = actor(curEnemy.trainerModel || 'rex_raised', REX_POS, YAW_M + 0.15);
     items = { heal: BData.ITEMS.heal.uses, cure: BData.ITEMS.cure.uses };
     expFrac = M3.clamp(pState.exp / BData.expToNext(pState.level), 0, 1); expTween = null;
@@ -4542,7 +5143,7 @@ const Battle = (() => {
     awaitParty = false; pickedAlly = -1; awaitOptional = false;
     awaitAsk = false; askChoice = -1; askCursor = 1;
     ball.visible = false; ball.flight = null;
-    Sfx.startMusic(arena === 'dungeon' ? 'boss' : 'battle'); // majestic battle BGM
+    Sfx.startMusic(arena === 'dungeon' ? 'boss' : (arena === 'tutorial' ? 'tutorial' : 'battle'));
 
     if (params.fly) {
       state = 'FLY';
@@ -4554,9 +5155,10 @@ const Battle = (() => {
       state = 'INTRO';
       mode = 'none';
       player.visible = enemy.visible = false;
-      if (arena === 'dungeon')
-        Cam.cut([P_POS[0] - DIR_PM[0] * 1.0, 0.4, P_POS[2] - DIR_PM[2] * 1.0], [BOSS_POS[0], 2.0, BOSS_POS[2]], 56);
-      else {
+      if (arena === 'dungeon' || arena === 'tutorial') {
+        const ep = enemyPos();
+        Cam.cut([P_POS[0] - DIR_PM[0] * 1.0, 0.4, P_POS[2] - DIR_PM[2] * 1.0], [ep[0], 2.0, ep[2]], 56);
+      } else {
         Cam.cut([4.8, 3.1, 6.6], [0, 0.9, 0.2], 44);
         Cam.play([{ t: 2300, pos: defShot.pos, look: defShot.look, fov: defShot.fov, ease: 'inOutCubic' }]);
       }
@@ -4756,8 +5358,9 @@ const Battle = (() => {
       }
     }
 
-    // dungeon atmosphere: drifting ash, periodic void-lightning + rift pulses
-    if (arena === 'dungeon' && state !== 'DONE') {
+    // dungeon / tutorial atmosphere: drifting ash, periodic void-lightning + pulses
+    if ((arena === 'dungeon' || arena === 'tutorial') && state !== 'DONE') {
+      const ep = enemyPos();
       ashT -= dt;
       if (ashT <= 0) {
         ashT = 0.05;
@@ -4770,9 +5373,9 @@ const Battle = (() => {
         const acting = state === 'TURN';
         riftT = (acting ? 0.9 : 2.4) + Math.random() * (acting ? 1.0 : 3);
         Fx.flash(110, acting ? 0.28 : 0.22, [0.6, 0.3, 0.95]);
-        Fx.pulseLight([BOSS_POS[0], BOSS_POS[1] + 1.6, BOSS_POS[2]], [0.66, 0.42, 1], acting ? 1.8 : 1.3, 240, 9);
+        Fx.pulseLight([ep[0], ep[1] + 1.6, ep[2]], [0.66, 0.42, 1], acting ? 1.8 : 1.3, 240, 9);
         Fx.addTrauma(acting ? 0.14 : 0.1);
-        Fx.burst([BOSS_POS[0], BOSS_POS[1] + 1.5, BOSS_POS[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
+        Fx.burst([ep[0], ep[1] + 1.5, ep[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
       }
     }
 
@@ -4904,6 +5507,11 @@ const Overworld = (() => {
   let cardT = 0, hintT = 0, t = 0;
   let fireflyT = 0, emberT = 0, swirlT = 0;
   let partyView = false, partyCheckCursor = 0; // C opens a read-only party check
+  // O opens an options overlay (rename / difficulty / save / save codes)
+  let optionsView = false, optMode = 'main', optCursor = 0, diffCursor = 2;
+  let notice = '', noticeT = 0;
+  const OPTIONS = ['Rename', 'Difficulty', 'Save', 'Export', 'Import', 'Close'];
+  function toast(msg) { notice = msg; noticeT = 2.6; }
 
   // read-only party rows for the overworld party check
   function savePartyRows() {
@@ -4995,9 +5603,20 @@ const Overworld = (() => {
             [hero.pos[0], 1.0, hero.pos[2]], 46);
     dialogue = null;
     pendingAction = null;
+    optionsView = false; optMode = 'main'; notice = ''; noticeT = 0;
     cardT = params.result || params.fromDungeon ? 0 : 4.2;
     hintT = params.result || params.fromDungeon ? 0 : 9;
     t = 0;
+    // opening: the amnesiac wakes in the grove — voiced monologue, then names
+    // himself in dialogue, while the cinematic letterbox slowly retracts.
+    if (params.result === 'intro') {
+      if (Game.setLetterbox) { Game.setLetterbox(1, 99, true); Game.setLetterbox(0, 0.5); }
+      const nm = (Game.save && Game.save.name) || 'AEGIS';
+      startDialogue([BData.STORY.faintAgain, BData.STORY.nameBeatPre + nm + BData.STORY.nameBeatPost], null, true);
+      hintT = 8;
+    } else if (Game.setLetterbox) {
+      Game.setLetterbox(0, 6);
+    }
   }
 
   // nearest interactable (npc or portal) within reach, or null
@@ -5012,9 +5631,9 @@ const Overworld = (() => {
     return best;
   }
 
-  function startDialogue(lines, onDone) {
-    dialogue = { lines: lines.slice(), idx: 0, tw: UI.typewriter(), onDone };
-    dialogue.tw.set(lines[0]);
+  function startDialogue(lines, onDone, voiced) {
+    dialogue = { lines: lines.slice(), idx: 0, tw: UI.typewriter(), onDone, voiced: !!voiced };
+    dialogue.tw.set(lines[0], 860, { voiced: !!voiced });
     Sfx.play('confirm');
   }
 
@@ -5037,13 +5656,90 @@ const Overworld = (() => {
     }
   }
 
+  // copy a loaded/imported save into the live save (Game.save is a getter, so
+  // we mutate the object it returns in place)
+  function applyLoadedSave(sv) {
+    const s = Game.save;
+    s.name = sv.name; s.difficulty = sv.difficulty; s.party = sv.party;
+    s.npcs = sv.npcs; s.bossBeaten = sv.bossBeaten; s.bossCaptured = sv.bossCaptured; s.battles = sv.battles;
+    Game.autosave();
+  }
+
+  function applyOption(label) {
+    if (label === 'Close') { optionsView = false; Sfx.play('cursor'); return; }
+    if (label === 'Rename') {
+      optionsView = false;
+      Game.toNameEntry('rename', (nm) => { Game.save.name = nm; Game.autosave(); Game.toOverworld(); });
+      return;
+    }
+    if (label === 'Difficulty') { optMode = 'diff'; diffCursor = (Game.save.difficulty || 3) - 1; Sfx.play('cursor'); return; }
+    if (label === 'Save') { Game.autosave(); Sfx.play('confirm'); toast(BData.MSG.saved); return; }
+    if (label === 'Export') {
+      const code = (typeof Save !== 'undefined') ? Save.exportCode(Game.save) : '';
+      let copied = false;
+      try { if (typeof navigator !== 'undefined' && navigator.clipboard) { navigator.clipboard.writeText(code); copied = true; } } catch (e) { /* blocked */ }
+      if (typeof Cloud !== 'undefined' && Cloud.available()) Cloud.push(Game.save.name || 'AEGIS', Game.save);
+      Sfx.play('confirm'); toast(copied ? BData.MSG.codeCopied : 'Save code ready.');
+      return;
+    }
+    if (label === 'Import') {
+      Sfx.play('confirm');
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then((txt) => {
+            const sv = (typeof Save !== 'undefined') ? Save.importCode(txt) : null;
+            if (sv) { applyLoadedSave(sv); toast(BData.MSG.codePasted); } else toast(BData.MSG.codeBad);
+          }).catch(() => toast(BData.MSG.codeBad));
+          return;
+        }
+      } catch (e) { /* blocked */ }
+      toast(BData.MSG.codeBad);
+    }
+  }
+
+  function updateOptions() {
+    if (optMode === 'diff') {
+      if (Input.pressed('down')) { diffCursor = (diffCursor + 1) % 5; Sfx.play('cursor'); }
+      if (Input.pressed('up')) { diffCursor = (diffCursor + 4) % 5; Sfx.play('cursor'); }
+      if (Input.pressed('confirm')) { Game.save.difficulty = diffCursor + 1; Game.autosave(); Sfx.play('confirm'); toast(BData.DIFFICULTY[diffCursor + 1].name + ' set'); optMode = 'main'; }
+      else if (Input.pressed('back')) { Sfx.play('cursor'); optMode = 'main'; }
+      return;
+    }
+    if (Input.pressed('down')) { optCursor = (optCursor + 1) % OPTIONS.length; Sfx.play('cursor'); }
+    if (Input.pressed('up')) { optCursor = (optCursor + OPTIONS.length - 1) % OPTIONS.length; Sfx.play('cursor'); }
+    if (Input.pressed('confirm')) applyOption(OPTIONS[optCursor]);
+    else if (Input.pressed('back') || Input.pressed('options')) { optionsView = false; Sfx.play('cursor'); }
+  }
+
+  function drawOptions(ctx) {
+    UI.panel(ctx, 300, 116, 360, 312, 16);
+    PFont.draw(ctx, 'OPTIONS', 338, 130, { scale: 2, color: '#33343c', outline: null });
+    if (optMode === 'diff') {
+      for (let i = 0; i < 5; i++) {
+        const d = BData.DIFFICULTY[i + 1], y = 162 + i * 46, sel = i === diffCursor;
+        UI.para(ctx, 322, y, 316, 40, 8); ctx.fillStyle = sel ? 'rgba(60,86,58,0.92)' : 'rgba(38,42,52,0.85)'; ctx.fill();
+        PFont.draw(ctx, d.id + ' ' + d.name, 336, y + 6, { scale: 2, color: '#ffffff' });
+        if (Game.save.difficulty === i + 1) PFont.draw(ctx, 'ON', 600, y + 6, { scale: 2, color: '#9fd0ff' });
+        PFont.draw(ctx, d.blurb, 336, y + 24, { scale: 1, color: '#bcd0e6' });
+      }
+      PFont.draw(ctx, 'E: Set   X: Back', 336, 400, { scale: 2, color: '#6b5d20', outline: null });
+    } else {
+      for (let i = 0; i < OPTIONS.length; i++) {
+        const y = 158 + i * 40, sel = i === optCursor;
+        UI.para(ctx, 322, y, 316, 34, 8); ctx.fillStyle = sel ? 'rgba(46,78,116,0.92)' : 'rgba(38,42,52,0.85)'; ctx.fill();
+        PFont.draw(ctx, OPTIONS[i], 336, y + 7, { scale: 2, color: '#ffffff' });
+      }
+      PFont.draw(ctx, 'E: Pick   X: Close', 336, 402, { scale: 2, color: '#6b5d20', outline: null });
+    }
+  }
+
   function updateDialogue(dt) {
     dialogue.tw.update(dt);
     if (Input.pressed('confirm') || Input.mouse.clicked) {
       if (!dialogue.tw.done()) { dialogue.tw.skip(); return; }
       dialogue.idx++;
       if (dialogue.idx < dialogue.lines.length) {
-        dialogue.tw.set(dialogue.lines[dialogue.idx]);
+        dialogue.tw.set(dialogue.lines[dialogue.idx], 860, { voiced: dialogue.voiced });
         Sfx.play('blip');
       } else {
         const done = dialogue.onDone;
@@ -5058,6 +5754,9 @@ const Overworld = (() => {
     t += dt;
     if (cardT > 0) cardT -= dt;
     if (hintT > 0) hintT -= dt;
+    if (noticeT > 0) noticeT -= dt;
+
+    if (optionsView) { updateOptions(dt); moving = false; Cam.follow(hero.pos, camYaw, { dist: 4.4, height: 2.3 }, dt); Cam.update(dt); return; }
 
     if (partyView) { // read-only party check (paused)
       const n = Math.max(1, Game.save.party.length);
@@ -5106,6 +5805,7 @@ const Overworld = (() => {
       }
       const near = nearest();
       if (Input.pressed('party')) { partyView = true; partyCheckCursor = 0; Sfx.play('confirm'); }
+      else if (Input.pressed('options')) { optionsView = true; optMode = 'main'; optCursor = 0; diffCursor = ((Game.save.difficulty || 3) - 1); Sfx.play('confirm'); }
       else if (near && Input.pressed('confirm')) interact(near);
     }
 
@@ -5152,14 +5852,623 @@ const Overworld = (() => {
     Gfx.drawDynamic(pd.data, pd.count);
   }
 
+  function drawToast(ctx) {
+    if (noticeT <= 0 || !notice) return;
+    const w = PFont.width(notice, 2) + 28;
+    ctx.fillStyle = 'rgba(14,16,22,0.85)';
+    UI.para(ctx, 480 - w / 2, 66, w, 30, 8); ctx.fill();
+    PFont.drawC(ctx, notice, 480, 74, { scale: 2, color: '#f8e0c8' });
+  }
+
   function renderUi(ctx) {
+    if (optionsView) { drawOptions(ctx); drawToast(ctx); return; }
     if (partyView) { UI.partyPanel(ctx, savePartyRows(), partyCheckCursor, t, false); return; }
     if (cardT > 0) UI.locationCard(ctx, 'WHISPER GROVE', M3.clamp(cardT, 0, 1));
-    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'C: Party   M: Mute']);
+    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk   C: Party', 'O: Options   M: Mute']);
+    drawToast(ctx);
     if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }
     if (Fx.transitioning()) return;
     const near = nearest();
     if (near) UI.prompt(ctx, near.kind === 'portal' ? 'E  Enter the Rift' : 'E  Talk');
+  }
+
+  function exit() { Fx.clear(); }
+
+  return { enter, update, render3d, renderUi, exit };
+})();
+</script>
+<script>
+/* Grove Clash — js/intro.js
+   Intro: the launch title cinematic — an original retro-RPG-style opening (NOT
+   a copy of any existing game's art/music). A dynamic 3D voxel "clash" tableau
+   (the protector AEGIS vs the colossal GIANT) with crossing beams, lightning,
+   sparks, big flashes and slow-mo under an intense moving camera, a "GROVE
+   CLASH" title pop and original title BGM. Three variants picked at random per
+   boot. Press any key / tap to go on; X skips. */
+const Intro = (() => {
+  let t = 0, V = null, staticH = null, beamT = 0, advanced = false, titleT = 0;
+  let pro = null, gia = null;
+
+  const PRO = [-2.2, 0, 0.4], GIA = [2.7, 0, 1.4];
+
+  const VARIANTS = [
+    { env: { sky: M3.hex('#0a0e1e'), fog: M3.hex('#10162e'), fogNear: 9, fogFar: 34,
+             lightDir: M3.normalize([], [-0.3, -0.7, 0.2]), lightCol: [0.8, 0.8, 1.0], ambient: [0.4, 0.42, 0.55] },
+      glow: [0.45, 0.72, 1], title: '#bfe6ff', shots: 'orbit' },
+    { env: { sky: M3.hex('#1a0a14'), fog: M3.hex('#2a1020'), fogNear: 9, fogFar: 34,
+             lightDir: M3.normalize([], [0.3, -0.7, 0.2]), lightCol: [1.0, 0.72, 0.6], ambient: [0.5, 0.4, 0.42] },
+      glow: [1, 0.5, 0.4], title: '#ffd2b0', shots: 'push' },
+    { env: { sky: M3.hex('#0a160f'), fog: M3.hex('#0f261a'), fogNear: 9, fogFar: 34,
+             lightDir: M3.normalize([], [-0.2, -0.75, -0.2]), lightCol: [0.7, 1.0, 0.82], ambient: [0.4, 0.5, 0.44] },
+      glow: [0.5, 1, 0.72], title: '#c6ffd8', shots: 'whip' },
+  ];
+
+  function build() {
+    if (staticH) return;
+    const parts = [];
+    const push = (n, p, y, s) => parts.push({ m: Models.get(n), pos: p, yaw: y, s });
+    const ground = Models.groundMesh({ radius: 14, dark: true, patches: [
+      { x: PRO[0], z: PRO[2], rx: 1.3, rz: 1.0, rot: 0 },
+      { x: GIA[0], z: GIA[2], rx: 3.0, rz: 3.0, rot: 0 },
+    ] });
+    const r = M3.rng(4242);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + r() * 0.3, rad = 10 + r() * 3;
+      push('spire', [Math.cos(a) * rad, 0, Math.sin(a) * rad], r() * 6.3, 0.7 + r() * 1.0);
+    }
+    let total = ground.count;
+    for (const p of parts) total += p.m.count;
+    const data = new Float32Array(total * 9);
+    data.set(ground.data, 0);
+    let off = ground.count * 9;
+    for (const p of parts) off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    staticH = Gfx.upload({ data, count: total });
+  }
+
+  const faceYaw = (from, to) => Math.atan2(to[0] - from[0], to[2] - from[2]);
+
+  function camFor(shots) {
+    const look = [0.2, 1.4, 0.9];
+    if (shots === 'push') {
+      Cam.cut([-5.5, 1.0, -4.0], look, 52);
+      Cam.play([{ t: 9000, pos: [-1.4, 2.0, -2.2], look, fov: 40, ease: 'inOutCubic' }]);
+    } else if (shots === 'whip') {
+      Cam.cut([5.2, 0.7, -3.0], [GIA[0], 2.2, GIA[2]], 50);
+      Cam.play([
+        { t: 1400, pos: [-4.6, 1.1, -2.4], look: [PRO[0], 1.0, PRO[2]], fov: 44, ease: 'inOutCubic' },
+        { t: 4200, pos: [0.2, 2.6, -5.2], look, fov: 46, ease: 'inOutCubic' },
+        { t: 9000, pos: [-3.6, 1.4, -3.4], look, fov: 42, ease: 'inOutCubic' },
+      ]);
+    } else { // orbit
+      const keys = [];
+      for (let i = 1; i <= 4; i++) {
+        const a = Math.PI * 0.85 + i * 0.42;
+        keys.push({ t: i * 2200, pos: [Math.sin(a) * 6.2, 1.3 + i * 0.18, Math.cos(a) * 6.2], look, fov: 46, ease: 'linear' });
+      }
+      Cam.cut([Math.sin(Math.PI * 0.85) * 6.2, 1.3, Math.cos(Math.PI * 0.85) * 6.2], look, 46);
+      Cam.play(keys);
+    }
+  }
+
+  function enter() {
+    build();
+    Fx.clear();
+    t = 0; beamT = 0.7; titleT = 0; advanced = false;
+    V = VARIANTS[Math.floor(Math.random() * VARIANTS.length)];
+    pro = { h: Game.handle('protector'), pos: PRO, yaw: faceYaw(PRO, GIA), height: Models.get('protector').height };
+    gia = { h: Game.handle('giant'), pos: GIA, yaw: faceYaw(GIA, PRO), height: Models.get('giant').height };
+    camFor(V.shots);
+    Game.setBlur(0);
+    Game.setLetterbox(1, 6, true);   // cinematic bars
+    Sfx.startMusic('title');
+  }
+
+  function go() { if (advanced) return; advanced = true; Game.toTitle(); }
+
+  function update(rawDt) {
+    const dt = rawDt * Fx.timeScale();
+    t += dt;
+    Cam.update(dt);
+    if (t > 1.0) titleT = Math.min(1, titleT + dt * 0.8);
+
+    // periodic crossing beams + lightning between the two combatants
+    beamT -= dt;
+    if (beamT <= 0) {
+      beamT = 1.0 + Math.random() * 0.5;
+      const gMaw = [gia.pos[0], gia.pos[1] + gia.height * 0.52, gia.pos[2]];
+      const pCh = [pro.pos[0], pro.pos[1] + pro.height * 0.55, pro.pos[2]];
+      Sfx.play('giantbeam'); Sfx.play('beam');
+      Fx.beam(gMaw, pCh, 600, { rate: 8, colors: [V.glow, [1, 1, 1], [1, 0.85, 0.4]], jitter: 0.18, s: 0.12 });
+      Fx.beam(pCh, gMaw, 600, { rate: 7, colors: [[0.6, 0.4, 1], [1, 1, 1]], jitter: 0.12, s: 0.08 });
+      const mid = [(gMaw[0] + pCh[0]) / 2, (gMaw[1] + pCh[1]) / 2 + 0.2, (gMaw[2] + pCh[2]) / 2];
+      Fx.bolt(gMaw, pCh, { segs: 10, jitter: 0.7, colors: [[1, 1, 1], V.glow], life: 0.18, forks: 2, forkLen: 0.8 });
+      Fx.flash(70, 0.5, V.glow);
+      Fx.pulseLight(mid, V.glow, 3.4, 320, 9);
+      Fx.slowmo(220, 0.5);
+      Fx.addTrauma(0.45);
+      Fx.burst(mid, { n: 26, speed: 3.4, colors: [V.glow, [1, 1, 1]], life: 0.55, g: -2 });
+      Cam.kickFov(-4, 360);
+    }
+    // drifting embers
+    if (Math.random() < 0.5)
+      Fx.spawn({ p: [(Math.random() - 0.5) * 14, 6, (Math.random() - 0.5) * 10 + 2], c: V.glow,
+                 v: [0, -1.3 - Math.random(), 0], drag: 0.1, life: 2.2, s: 0.03, s1: 0.01 });
+
+    if (!advanced && t > 0.6 && (Input.pressed('confirm') || Input.pressed('back') || Input.mouse.clicked)) go();
+    if (t > 11.5) go();   // auto-advance if left alone
+  }
+
+  const mTmp = M3.mat();
+  function render3d(aspect) {
+    V.env.point = Fx.lightState();
+    const { view, proj } = Cam.matrices(aspect);
+    Gfx.begin(view, proj, V.env);
+    Gfx.draw(staticH, null, {});
+    const gb = 0.04 * Math.sin(t * 1.1);
+    Gfx.draw(gia.h, M3.trs(mTmp, [gia.pos[0], gia.pos[1], gia.pos[2]], [gia.yaw, 0, 0], [1, 1 + gb, 1]), {});
+    const pb = 0.02 * Math.sin(t * 2.4);
+    Gfx.draw(pro.h, M3.trs(mTmp, [pro.pos[0], pro.pos[1], pro.pos[2]], [pro.yaw, 0, 0], [1, 1 + pb, 1]), {});
+    const pd = Fx.particleData();
+    Gfx.drawDynamic(pd.data, pd.count);
+  }
+
+  function renderUi(ctx) {
+    if (titleT > 0) {
+      const a = M3.clamp(titleT, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = a;
+      const sc = 8 + (1 - a) * 3;
+      PFont.drawC(ctx, BData.STORY.title, 480, 150, { scale: sc, color: V.title, outline: '#0a0a14' });
+      PFont.drawC(ctx, BData.STORY.subtitle, 480, 232, { scale: 2, color: '#e8e8f0', outline: '#0a0a14' });
+      ctx.restore();
+    }
+    if (t > 1.6 && Math.sin(t * 4) > -0.2)
+      PFont.drawC(ctx, BData.STORY.pressStart, 480, 420, { scale: 3, color: '#ffffff', outline: '#0a0a14' });
+    PFont.draw(ctx, BData.STORY.skipHint, 24, 500, { scale: 2, color: '#aeb4c4', outline: '#0a0a14' });
+  }
+
+  function exit() { Fx.clear(); }
+
+  return { enter, update, render3d, renderUi, exit };
+})();
+</script>
+<script>
+/* Grove Clash — js/story.js
+   Story: the first-person "wake up" cutscene (phase 'wake') and the faint
+   hand-off (phase 'faint'). Driven by a small generator-coroutine runner
+   (same pattern as battle.js). 'wake': black + blur + eyelid blinks reveal
+   the protector's back, the camera tilts UP to the colossal giant firing an
+   intense beam, tilts back DOWN, the player resolves to help, then a camera
+   swing flings us into the tutorial battle. 'faint': the player's avatar
+   wobbles and collapses, fading to black into the overworld. Player lines
+   are voiced AND shown as text. */
+const Story = (() => {
+  const S = BData.STORY;
+  let phase = 'wake', t = 0, staticH = null;
+  let pro = null, gia = null, hero = null, giaH = 0, heroYaw = Math.PI;
+  let heroVisible = false, heroScl = [1, 1, 1], heroRot = 0;
+  let lid = 1, lidT = 1, lidRate = 8;        // eyelid (0 open .. 1 closed)
+  let blur = 0, blurT = 0, blurRate = 2;     // CSS blur px on the GL canvas
+  let tw = null, showLine = false;
+
+  const PRO = [0, 0, 0], GIA = [0.6, 0, 7.6];
+
+  // ----- script runner (yield ms | yield predicate | yield* sub) -----
+  let script = null, waitO = null;
+  const run = (g) => { script = g; waitO = null; };
+  function step(dt) {
+    if (!script) return;
+    if (waitO) {
+      if (waitO.ms !== undefined) { waitO.ms -= dt * 1000; if (waitO.ms > 0) return; }
+      else if (waitO.cond && !waitO.cond()) return;
+      waitO = null;
+    }
+    while (script) {
+      const r = script.next();
+      if (r.done) { script = null; break; }
+      const y = r.value;
+      if (typeof y === 'number') { if (y > 0) { waitO = { ms: y }; break; } }
+      else if (typeof y === 'function') { if (!y()) { waitO = { cond: y }; break; } }
+    }
+  }
+
+  const consume = () => Input.pressed('confirm') || Input.pressed('back') || Input.mouse.clicked;
+  function* say(text) {
+    showLine = true; tw.set(text, 760, { voiced: true });
+    let hold = 0;
+    yield () => {
+      if (!tw.done()) { if (consume()) tw.skip(); return false; }
+      hold += 1 / 60;
+      return consume() || hold > 2.4;   // advance on input, or auto after a beat
+    };
+    showLine = false;
+  }
+
+  function build() {
+    if (staticH) return;
+    const parts = [];
+    const push = (n, p, y, s) => parts.push({ m: Models.get(n), pos: p, yaw: y, s });
+    const ground = Models.groundMesh({ radius: 14, dark: true, patches: [
+      { x: GIA[0], z: GIA[2], rx: 3.2, rz: 3.2, rot: 0 },
+    ] });
+    const r = M3.rng(515);
+    for (let i = 0; i < 13; i++) {
+      const a = (i / 13) * Math.PI * 2 + r() * 0.3, rad = 10 + r() * 3;
+      push('spire', [Math.cos(a) * rad, 0, Math.sin(a) * rad], r() * 6.3, 0.7 + r() * 1.0);
+    }
+    let total = ground.count;
+    for (const p of parts) total += p.m.count;
+    const data = new Float32Array(total * 9);
+    data.set(ground.data, 0);
+    let off = ground.count * 9;
+    for (const p of parts) off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    staticH = Gfx.upload({ data, count: total });
+  }
+
+  // ----- camera beats -----
+  const camTiltUp = () => Cam.play([{ t: 950, pos: [0, 1.05, -2.1], look: [GIA[0], 3.7, GIA[2]], fov: 56, ease: 'inOutCubic' }]);
+  const camTiltDown = () => Cam.play([{ t: 700, pos: [0, 0.95, -2.3], look: [0, 0.7, 1.7], fov: 46, ease: 'inOutCubic' }]);
+  const camStand = () => Cam.play([{ t: 620, pos: [0, 1.75, -2.7], look: [0, 1.25, 1.7], fov: 48, ease: 'outCubic' }]);
+  const camSwing = () => Cam.play([{ t: 520, pos: [3.6, 1.5, -1.0], look: [0, 1.0, 2.2], fov: 62, ease: 'inOutCubic' }]);
+
+  function fireGiantBeam() {
+    const maw = [GIA[0], GIA[1] + giaH * 0.52, GIA[2]];
+    const tgt = [PRO[0], 1.0, PRO[2] + 1.2];
+    Sfx.play('giantbeam'); Sfx.play('boom'); Sfx.play('roar');
+    Fx.beam(maw, tgt, 1100, { rate: 9, colors: [[1, 0.9, 0.4], [1, 1, 1], [0.7, 0.5, 1]], jitter: 0.2, s: 0.14 });
+    Fx.bolt(maw, tgt, { segs: 12, jitter: 0.9, colors: [[1, 1, 1], [1, 0.9, 0.4]], life: 0.2, forks: 3, forkLen: 1.0 });
+    Fx.flash(160, 0.85, [1, 0.9, 0.6]);
+    Fx.pulseLight(maw, [1, 0.85, 0.4], 4.5, 500, 12);
+    Fx.slowmo(500, 0.4);
+    Fx.addTrauma(0.9);
+    Cam.kickFov(8, 420);
+  }
+
+  // ----- phase scripts -----
+  function* wakeScript() {
+    Game.setLetterbox(1, 8, true);
+    lid = 1; lidT = 1; blur = 9; blurT = 9; blurRate = 8;
+    Sfx.startMusic('tutorial');
+    Cam.cut([0, 0.9, -2.4], [0, 0.8, 1.6], 46);
+    yield 500;
+    yield* say(S.wakeWhere);
+    yield 250;
+    // eyelid blinks reveal the protector's back
+    for (let i = 0; i < 3; i++) { lidT = 0.1; lidRate = 9; yield 280; lidT = 0.82; lidRate = 16; yield 150; }
+    lidT = 0; lidRate = 6;
+    blurT = 0; blurRate = 1.4;   // vision clears as he wakes (~2s)
+    yield 760;
+    camTiltUp();
+    yield 520;
+    fireGiantBeam();
+    yield 1250;
+    camTiltDown();
+    yield 720;
+    yield* say(S.wakeHelp);
+    yield 220;
+    camStand();
+    yield 620;
+    Sfx.play('whoosh');
+    camSwing();
+    Fx.flash(240, 0.95, [1, 1, 1]);
+    Fx.addTrauma(0.5);
+    yield 520;
+    Game.toTutorialBattle();
+  }
+
+  function* faintScript() {
+    Game.setLetterbox(1, 6, true);
+    Sfx.stopMusic();
+    Game.setBlur(0);
+    heroVisible = true; heroScl = [1, 1, 1]; heroRot = 0; heroYaw = Math.PI;
+    Cam.cut([0, 1.2, -3.0], [0, 1.0, 0], 42);
+    yield 450;
+    Sfx.play('faint');
+    Fx.slowmo(800, 0.5);
+    for (let i = 0; i < 3; i++) { heroRot = 0.2; yield 120; heroRot = -0.2; yield 120; }
+    heroRot = 0;
+    Fx.flash(90, 0.85);
+    Fx.addTrauma(0.3);
+    const m = M3.trs(M3.mat(), [0, 0, 0], [heroYaw, 0, 0], [1, 1, 1]);
+    Fx.dissolve(Models.get('hero').centers, m, { life: 1.1 });
+    heroVisible = false;
+    Fx.ring([0, 0.05, 0], { r0: 0.7, r1: 0.1, n: 14, life: 0.5, colors: [[0.8, 0.8, 0.9], [1, 1, 1]], s: 0.05 });
+    yield 350;
+    Fx.transition('fade', () => Game.afterFaint(), null);
+    yield 1300;
+  }
+
+  function enter(params) {
+    params = params || {};
+    phase = params.phase || 'wake';
+    build();
+    Fx.clear();
+    t = 0; tw = UI.typewriter(); showLine = false;
+    giaH = Models.get('giant').height;
+    pro = { h: Game.handle('protector'), height: Models.get('protector').height };
+    gia = { h: Game.handle('giant'), height: giaH };
+    hero = { h: Game.handle('hero') };
+    Game.setBlur(phase === 'wake' ? 9 : 0);
+    run(phase === 'wake' ? wakeScript() : faintScript());
+  }
+
+  function update(rawDt) {
+    const dt = rawDt * Fx.timeScale();
+    t += dt;
+    lid += (lidT - lid) * M3.clamp(dt * lidRate, 0, 1);
+    blur += (blurT - blur) * M3.clamp(dt * blurRate, 0, 1);
+    Game.setBlur(blur);
+    Cam.update(dt);
+    step(rawDt);          // script timing runs on raw dt (independent of slow-mo)
+    if (tw) tw.update(dt);
+  }
+
+  const mTmp = M3.mat();
+  function render3d(aspect) {
+    const env = { sky: M3.hex('#070710'), fog: M3.hex('#0e0a1c'), fogNear: 8, fogFar: 30,
+                  lightDir: M3.normalize([], [-0.3, -0.7, -0.2]), lightCol: [0.7, 0.7, 0.95],
+                  ambient: [0.4, 0.42, 0.56], point: Fx.lightState() };
+    const { view, proj } = Cam.matrices(aspect);
+    Gfx.begin(view, proj, env);
+    Gfx.draw(staticH, null, {});
+    if (phase === 'wake') {
+      Gfx.draw(gia.h, M3.trs(mTmp, GIA, [Math.PI, 0, 0], [1, 1 + 0.04 * Math.sin(t * 1.1), 1]), {});
+      Gfx.draw(pro.h, M3.trs(mTmp, PRO, [0, 0, 0], [1, 1 + 0.02 * Math.sin(t * 2.2), 1]), {});
+    } else if (heroVisible) {
+      Gfx.draw(hero.h, M3.trs(mTmp, [0, 0, 0], [heroYaw, 0, heroRot], heroScl), {});
+    }
+    const pd = Fx.particleData();
+    Gfx.drawDynamic(pd.data, pd.count);
+  }
+
+  function renderUi(ctx) {
+    // eyelid (first-person blink) — black bars closing from top & bottom
+    if (lid > 0.001) {
+      const h = Math.round(lid * 300);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, 960, h);
+      ctx.fillRect(0, 540 - h, 960, h);
+    }
+    if (showLine && tw) UI.cutsceneText(ctx, tw, t, tw.done());
+  }
+
+  function exit() { Fx.clear(); Game.setBlur(0); }
+
+  return { enter, update, render3d, renderUi, exit };
+})();
+</script>
+<script>
+/* Grove Clash — js/titlemenu.js
+   TitleMenu: shown after the Intro cinematic. Three save slots (each a live
+   localStorage summary or EMPTY) + a difficulty picker for new games.
+   Selecting an EMPTY slot starts a NEW GAME (pick difficulty -> opening
+   story); selecting a filled slot CONTINUEs it. X erases the selected slot.
+   Keyboard + mouse/touch. Cinematic letterbox stays up. */
+const TitleMenu = (() => {
+  let t = 0, mode = 'slots', slotCursor = 0, diffCursor = 2, pendingSlot = 1, emberT = 0;
+
+  const SLOT_RECTS = [];
+  for (let i = 0; i < 3; i++) SLOT_RECTS.push({ x: 280, y: 168 + i * 78, w: 400, h: 66 });
+  const DIFF_RECTS = [];
+  for (let i = 0; i < 5; i++) DIFF_RECTS.push({ x: 250, y: 150 + i * 62, w: 460, h: 54 });
+
+  const ENV = { sky: M3.hex('#0a0c1a'), fog: M3.hex('#10142a'), fogNear: 10, fogFar: 30,
+                lightDir: M3.normalize([], [-0.3, -0.7, 0.2]), lightCol: [0.7, 0.7, 0.95], ambient: [0.42, 0.44, 0.58] };
+
+  function enter() {
+    t = 0; mode = 'slots'; slotCursor = 0; diffCursor = 2;
+    Cam.cut([0, 2.4, -5.5], [0, 1.2, 0.5], 44);
+    Game.setBlur(0);
+    Game.setLetterbox(1, 6, true);
+    if (!Sfx.isMuted && Sfx.startMusic) Sfx.startMusic('title');
+  }
+
+  const slots = () => [1, 2, 3].map((n) => (typeof Save !== 'undefined' ? Save.summary(n) : null));
+
+  function hit(rects, n) {
+    if (!Input.mouse.inside) return -1;
+    for (let i = 0; i < rects.length && i < n; i++) {
+      const r = rects[i];
+      if (Input.mouse.x >= r.x && Input.mouse.x <= r.x + r.w &&
+          Input.mouse.y >= r.y && Input.mouse.y <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  function chooseSlot(i) {
+    const sum = slots()[i];
+    if (sum) { Sfx.play('confirm'); Game.continueGame(i + 1); }
+    else { Sfx.play('cursor'); mode = 'diff'; diffCursor = 2; pendingSlot = i + 1; }
+  }
+
+  function update(rawDt) {
+    const dt = rawDt * Fx.timeScale();
+    t += dt;
+    Cam.update(dt);
+    emberT -= dt;
+    if (emberT <= 0) {
+      emberT = 0.12;
+      Fx.spawn({ p: [(Math.random() - 0.5) * 12, 5, (Math.random() - 0.5) * 8 + 1], c: [0.5, 0.55, 0.9],
+                 v: [0, -1.1 - Math.random(), 0], drag: 0.1, life: 2.4, s: 0.03, s1: 0.01 });
+    }
+
+    if (mode === 'slots') {
+      if (Input.pressed('down')) { slotCursor = (slotCursor + 1) % 3; Sfx.play('cursor'); }
+      if (Input.pressed('up')) { slotCursor = (slotCursor + 2) % 3; Sfx.play('cursor'); }
+      const hov = hit(SLOT_RECTS, 3);
+      if (hov >= 0) slotCursor = hov;
+      if (Input.pressed('confirm') || (hov >= 0 && Input.mouse.clicked)) chooseSlot(slotCursor);
+      else if (Input.pressed('back')) { // erase the selected slot
+        if (typeof Save !== 'undefined' && slots()[slotCursor]) { Save.clear(slotCursor + 1); Sfx.play('buzz'); }
+      }
+    } else { // difficulty picker
+      if (Input.pressed('down')) { diffCursor = (diffCursor + 1) % 5; Sfx.play('cursor'); }
+      if (Input.pressed('up')) { diffCursor = (diffCursor + 4) % 5; Sfx.play('cursor'); }
+      const hov = hit(DIFF_RECTS, 5);
+      if (hov >= 0) diffCursor = hov;
+      if (Input.pressed('confirm') || (hov >= 0 && Input.mouse.clicked)) {
+        Sfx.play('confirm'); Game.startNewGame(diffCursor + 1, pendingSlot);
+      } else if (Input.pressed('back')) { Sfx.play('cursor'); mode = 'slots'; }
+    }
+  }
+
+  function render3d(aspect) {
+    ENV.point = Fx.lightState();
+    const { view, proj } = Cam.matrices(aspect);
+    Gfx.begin(view, proj, ENV);
+    const pd = Fx.particleData();
+    Gfx.drawDynamic(pd.data, pd.count);
+  }
+
+  function renderUi(ctx) {
+    PFont.drawC(ctx, BData.STORY.title, 480, 92, { scale: 5, color: '#bfe6ff', outline: '#0a0a14' });
+    if (mode === 'slots') {
+      PFont.drawC(ctx, 'SELECT A FILE', 480, 150, { scale: 2, color: '#e8e8f0', outline: '#0a0a14' });
+      const sm = slots();
+      for (let i = 0; i < 3; i++) {
+        const r = SLOT_RECTS[i], sum = sm[i], sel = i === slotCursor;
+        UI.para(ctx, r.x, r.y, r.w, r.h, 10);
+        ctx.fillStyle = sel ? 'rgba(46,78,116,0.92)' : 'rgba(30,34,48,0.9)'; ctx.fill();
+        if (sel) { UI.para(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 10); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke(); }
+        PFont.draw(ctx, 'SLOT ' + (i + 1), r.x + 18, r.y + 10, { scale: 2, color: '#f8e0c8' });
+        if (sum) {
+          const nm = sum.name || 'AEGIS';
+          PFont.draw(ctx, nm, r.x + 130, r.y + 10, { scale: 2, color: '#ffffff' });
+          const d = BData.DIFFICULTY[sum.difficulty] || BData.DIFFICULTY[3];
+          PFont.draw(ctx, d.id + ' ' + d.name, r.x + 18, r.y + 38, { scale: 2, color: '#9fd0ff' });
+          const lv = 'Lv.' + Math.max.apply(null, sum.levels.concat([1]));
+          PFont.draw(ctx, lv, r.x + r.w - 18 - PFont.width(lv, 2), r.y + 38, { scale: 2, color: '#c8ccd8' });
+        } else {
+          PFont.draw(ctx, 'EMPTY - New Game', r.x + 130, r.y + 24, { scale: 2, color: '#aeb4c4' });
+        }
+      }
+      PFont.drawC(ctx, 'UP/DOWN: Select   E: Confirm   X: Erase', 480, 432, { scale: 2, color: '#aeb4c4', outline: '#0a0a14' });
+    } else {
+      PFont.drawC(ctx, 'SELECT DIFFICULTY', 480, 116, { scale: 2, color: '#e8e8f0', outline: '#0a0a14' });
+      for (let i = 0; i < 5; i++) {
+        const r = DIFF_RECTS[i], d = BData.DIFFICULTY[i + 1], sel = i === diffCursor;
+        UI.para(ctx, r.x, r.y, r.w, r.h, 10);
+        ctx.fillStyle = sel ? 'rgba(60,86,58,0.92)' : 'rgba(30,34,48,0.9)'; ctx.fill();
+        if (sel) { UI.para(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 10); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke(); }
+        PFont.draw(ctx, d.id + ' ' + d.name, r.x + 18, r.y + 8, { scale: 2, color: '#ffffff' });
+        PFont.draw(ctx, d.blurb, r.x + 18, r.y + 32, { scale: 2, color: '#bcd0e6' });
+      }
+      PFont.drawC(ctx, 'E: Begin   X: Back', 480, 478, { scale: 2, color: '#aeb4c4', outline: '#0a0a14' });
+    }
+  }
+
+  function exit() { Fx.clear(); }
+
+  return { enter, update, render3d, renderUi, exit };
+})();
+</script>
+<script>
+/* Grove Clash — js/nameentry.js
+   NameEntry: an on-screen keyboard (A-Z, 0-9, SPACE, DEL, OK) navigable with
+   arrows/D-pad + confirm and fully tappable. Up to 10 chars. Used for both
+   the amnesiac "name yourself" beat after the faint (mode 'create') and the
+   overworld Options "Rename" (mode 'rename'). Calls cfg.onDone(name). */
+const NameEntry = (() => {
+  const ROWS = [
+    ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+    ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'],
+    ['U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3'],
+    ['4', '5', '6', '7', '8', '9', 'SPACE', 'DEL', 'OK'],
+  ];
+  const MAXLEN = 10;
+  const CW = 66, CH = 46, GAP = 4;
+  const GX = 480 - (10 * (CW + GAP) - GAP) / 2, GY = 196;
+
+  const ENV = { sky: M3.hex('#0a0c1a'), fog: M3.hex('#10142a'), fogNear: 10, fogFar: 30,
+                lightDir: M3.normalize([], [-0.3, -0.7, 0.2]), lightCol: [0.7, 0.7, 0.95], ambient: [0.42, 0.44, 0.58] };
+
+  let t = 0, row = 0, col = 0, name = '', cfg = null, emberT = 0;
+
+  const rectOf = (r, c) => ({ x: GX + c * (CW + GAP), y: GY + r * (CH + GAP), w: CW, h: CH });
+
+  function enter(params) {
+    cfg = params || {};
+    name = (cfg.initial || '').slice(0, MAXLEN).toUpperCase();
+    t = 0; row = 0; col = 0;
+    Cam.cut([0, 2.4, -5.5], [0, 1.2, 0.5], 44);
+    Game.setBlur(0);
+    Game.setLetterbox(1, 6, true);
+  }
+
+  function commit() {
+    const final = (name.trim() || cfg.initial || 'AEGIS').slice(0, MAXLEN);
+    Sfx.play('confirm');
+    if (cfg.onDone) cfg.onDone(final);
+  }
+
+  function activate(key) {
+    if (key === 'OK') { commit(); return; }
+    if (key === 'DEL') { name = name.slice(0, -1); Sfx.play('cursor'); return; }
+    if (key === 'SPACE') { if (name.length < MAXLEN) { name += ' '; Sfx.play('blip'); } return; }
+    if (name.length < MAXLEN) { name += key; Sfx.play('blip'); }
+    else Sfx.play('buzz');
+  }
+
+  function hit() {
+    if (!Input.mouse.inside) return null;
+    for (let r = 0; r < ROWS.length; r++)
+      for (let c = 0; c < ROWS[r].length; c++) {
+        const q = rectOf(r, c);
+        if (Input.mouse.x >= q.x && Input.mouse.x <= q.x + q.w &&
+            Input.mouse.y >= q.y && Input.mouse.y <= q.y + q.h) return { r, c };
+      }
+    return null;
+  }
+
+  function update(rawDt) {
+    const dt = rawDt * Fx.timeScale();
+    t += dt;
+    Cam.update(dt);
+    emberT -= dt;
+    if (emberT <= 0) {
+      emberT = 0.14;
+      Fx.spawn({ p: [(Math.random() - 0.5) * 12, 5, (Math.random() - 0.5) * 8 + 1], c: [0.5, 0.55, 0.9],
+                 v: [0, -1.0 - Math.random(), 0], drag: 0.1, life: 2.4, s: 0.03, s1: 0.01 });
+    }
+
+    if (Input.pressed('down')) { row = (row + 1) % ROWS.length; col = Math.min(col, ROWS[row].length - 1); Sfx.play('cursor'); }
+    if (Input.pressed('up')) { row = (row + ROWS.length - 1) % ROWS.length; col = Math.min(col, ROWS[row].length - 1); Sfx.play('cursor'); }
+    if (Input.pressed('right')) { col = (col + 1) % ROWS[row].length; Sfx.play('cursor'); }
+    if (Input.pressed('left')) { col = (col + ROWS[row].length - 1) % ROWS[row].length; Sfx.play('cursor'); }
+    const h = hit();
+    if (h) { row = h.r; col = h.c; }
+    if (Input.pressed('confirm') || (h && Input.mouse.clicked)) activate(ROWS[row][col]);
+    if (Input.pressed('back')) activate('DEL');
+  }
+
+  function render3d(aspect) {
+    ENV.point = Fx.lightState();
+    const { view, proj } = Cam.matrices(aspect);
+    Gfx.begin(view, proj, ENV);
+    const pd = Fx.particleData();
+    Gfx.drawDynamic(pd.data, pd.count);
+  }
+
+  function renderUi(ctx) {
+    const title = cfg && cfg.mode === 'rename' ? 'RENAME' : 'NAME YOURSELF';
+    PFont.drawC(ctx, title, 480, 70, { scale: 4, color: '#bfe6ff', outline: '#0a0a14' });
+    PFont.drawC(ctx, BData.STORY.namePrompt, 480, 120, { scale: 2, color: '#cdd4e6', outline: '#0a0a14' });
+    // name field
+    UI.para(ctx, 320, 146, 320, 38, 8); ctx.fillStyle = 'rgba(14,16,22,0.92)'; ctx.fill();
+    ctx.strokeStyle = '#62666f'; ctx.lineWidth = 2; UI.para(ctx, 320, 146, 320, 38, 8); ctx.stroke();
+    const shown = name + ((Math.sin(t * 5) > 0 && name.length < MAXLEN) ? '_' : '');
+    PFont.drawC(ctx, shown || ' ', 480, 156, { scale: 3, color: '#ffffff' });
+    // keyboard grid
+    for (let r = 0; r < ROWS.length; r++)
+      for (let c = 0; c < ROWS[r].length; c++) {
+        const q = rectOf(r, c), key = ROWS[r][c], sel = r === row && c === col;
+        UI.para(ctx, q.x, q.y, q.w, q.h, 6);
+        ctx.fillStyle = sel ? 'rgba(56,96,140,0.95)' : 'rgba(34,38,52,0.9)'; ctx.fill();
+        if (sel) { UI.para(ctx, q.x - 2, q.y - 2, q.w + 4, q.h + 4, 6); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke(); }
+        const label = key.length > 1 ? key : key;
+        PFont.drawC(ctx, label, q.x + q.w / 2, q.y + q.h / 2 - 7, { scale: key.length > 1 ? 1 : 2, color: '#ffffff' });
+      }
+    PFont.drawC(ctx, 'Arrows: Move   E: Pick   X: Delete', 480, 488, { scale: 2, color: '#aeb4c4', outline: '#0a0a14' });
   }
 
   function exit() { Fx.clear(); }
@@ -5208,17 +6517,29 @@ const Game = (() => {
   let showStats = true;
 
   // hp: null means "full HP" (resolved against statsFor at battle start)
-  const save = {
-    party: [
-      { species: 'PIXLIT', level: 10, hp: 17, exp: 0 }, // worn from the journey
-      { species: 'THORNLET', level: 9, hp: null, exp: 0 },
-      { species: 'EMBERIK', level: 9, hp: null, exp: 0 },
-    ],
-    npcs: {},            // npcId -> true once that trainer is beaten
-    bossBeaten: false,
-    bossCaptured: false,
-    battles: 0,
-  };
+  function makeDefaultSave(difficulty) {
+    return {
+      name: '',
+      difficulty: difficulty || 3,
+      party: [
+        { species: 'PIXLIT', level: 10, hp: 17, exp: 0 }, // worn from the journey
+        { species: 'THORNLET', level: 9, hp: null, exp: 0 },
+        { species: 'EMBERIK', level: 9, hp: null, exp: 0 },
+      ],
+      npcs: {},            // npcId -> true once that trainer is beaten
+      bossBeaten: false,
+      bossCaptured: false,
+      battles: 0,
+    };
+  }
+  let save = makeDefaultSave();   // swapped wholesale on new-game / continue
+  let activeSlot = 0;             // 0 = none (debug); 1..3 = a persisted slot
+  let tutorialActive = false;     // routes the tutorial battle end -> Story:faint
+  let nameEntryCfg = null;
+
+  function autosave() {
+    if (activeSlot && typeof Save !== 'undefined') Save.write(activeSlot, save);
+  }
 
   function handle(name) {
     if (!handles[name]) handles[name] = Gfx.upload(Models.get(name));
@@ -5244,10 +6565,30 @@ const Game = (() => {
     }
   }
 
+  // ----- cinematic letterbox (animated bars) + GL-canvas blur -----
+  let letterCur = 0, letterTarget = 0, letterRate = 6;
+  function setLetterbox(target, rate, instant) {
+    letterTarget = M3.clamp(target, 0, 1);
+    if (rate) letterRate = rate;
+    if (instant) letterCur = letterTarget;
+  }
+  function setBlur(px) {
+    if (glCanvas) glCanvas.style.filter = px > 0.05 ? ('blur(' + (+px).toFixed(2) + 'px)') : '';
+  }
+
+  // scene registry — switchNow(name) is generic over every scene
+  const SCENES = () => ({
+    intro: Intro, title: TitleMenu, story: Story, name: NameEntry,
+    battle: Battle, overworld: Overworld, viewer: Viewer,
+  });
+
+  let sceneId = 'intro';            // current scene key (exposed for tests)
   function switchNow(name, params) {
     if (scene && scene.exit) scene.exit();
-    scene = name === 'battle' ? Battle : Overworld;
-    applyGlInset(name === 'battle');
+    setBlur(0);
+    sceneId = SCENES()[name] ? name : 'overworld';
+    scene = SCENES()[name] || Overworld;
+    applyGlInset(scene === Battle);
     scene.enter(params || {});
   }
 
@@ -5267,12 +6608,48 @@ const Game = (() => {
     Fx.transition('fade', () => switchNow('overworld', Object.assign({ result }, ctx || {})), null);
   }
 
+  // ----- opening-sequence hand-offs -----
+  function toTitle() { Fx.transition('fade', () => switchNow('title', {}), null); }
+  function toStory(phase) { Fx.transition('fade', () => switchNow('story', { phase }), null); }
+  function toTutorialBattle() {
+    tutorialActive = true;
+    save.battles++;
+    Sfx.play('spawn');
+    Fx.transition('battleIn', () => switchNow('battle', {
+      arena: 'tutorial', tutorial: true,
+      playerTeam: [{ species: 'PROTECTOR', level: 14, hp: null, exp: 0 }],
+      enemy: { species: 'GIANT', level: 16, isGiant: true, trainer: 'COLOSSUS' },
+    }), null);
+  }
+  function toNameEntry(mode, onDone) {
+    Fx.transition('fade', () => switchNow('name', { mode, onDone, initial: save.name || '' }), null);
+  }
+
+  function startNewGame(difficulty, slot) {
+    save = makeDefaultSave(difficulty);
+    activeSlot = slot || 1;
+    autosave();
+    toStory('wake');
+  }
+  function continueGame(slot) {
+    const loaded = (typeof Save !== 'undefined') ? Save.read(slot) : null;
+    if (loaded) { save = loaded; activeSlot = slot; toOverworld('continue'); }
+    else startNewGame(3, slot);
+  }
+  // the tutorial battle always hands off to the faint cutscene (win OR lose)
+  function onTutorialBattleEnd() { tutorialActive = false; toStory('faint'); }
+  // after the faint: the amnesiac names himself, then enters the grove
+  function afterFaint() {
+    toNameEntry('create', (nm) => { save.name = nm; autosave(); toOverworld('intro'); });
+  }
+
   // called by Battle.endBattle: record progress, then return to the overworld
   function onBattleEnd(result, enemy) {
     if (result === 'win' || result === 'capture') {
       if (enemy && enemy.isBoss) { save.bossBeaten = true; if (result === 'capture') save.bossCaptured = true; }
       else if (enemy && enemy.npcId) save.npcs[enemy.npcId] = true;
     }
+    autosave();
     toOverworld(result, { fromDungeon: !!(enemy && enemy.isBoss) });
   }
 
@@ -5407,7 +6784,10 @@ const Game = (() => {
   // ---------------------------------------------------------------- loop
   function update(dt) {
     Fx.update(dt);
-    Input.setTouchLayout(scene === Battle ? 'battle' : 'overworld');
+    // D-pad walking only in the overworld; every other scene (battle + the
+    // menu/cutscene scenes) uses the tap-to-select + A/B layout.
+    Input.setTouchLayout(scene === Overworld ? 'overworld' : 'battle');
+    letterCur += (letterTarget - letterCur) * M3.clamp(dt * letterRate, 0, 1);
     if (Input.pressed('mute')) Sfx.toggleMute();
     if (Input.pressed('stats')) showStats = !showStats;
     if (scene && scene.update) scene.update(dt);
@@ -5429,6 +6809,14 @@ const Game = (() => {
       ctx.fillStyle = 'rgb(' + (fc[0] * 255 | 0) + ',' + (fc[1] * 255 | 0) + ',' + (fc[2] * 255 | 0) + ')';
       ctx.fillRect(0, 0, UI_VW, UI_VH);
       ctx.globalAlpha = 1;
+    }
+    // cinematic letterbox bars (cutscenes raise them; battle lowers them; the
+    // overworld retracts them slowly as gameplay begins)
+    if (letterCur > 0.002) {
+      const bar = Math.round(letterCur * 70);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, UI_VW, bar);
+      ctx.fillRect(0, UI_VH - bar, UI_VW, bar);
     }
     Fx.transitionDraw(ctx);
     if (Sfx.isMuted())
@@ -5496,17 +6884,35 @@ const Game = (() => {
     resize();
 
     const hash = location.hash;
-    if (hash.indexOf('viewer') >= 0) { scene = Viewer; scene.enter(); }
-    else if (hash.indexOf('fly') >= 0) { scene = Battle; scene.enter({ fly: true }); }
-    else if (hash.indexOf('dungeon') >= 0) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
-    else if (hash.indexOf('battle') >= 0) { scene = Battle; scene.enter({}); }
-    else { scene = Overworld; scene.enter({}); }
+    const has = (s) => hash.indexOf(s) >= 0;
+    if (has('viewer')) { scene = Viewer; scene.enter(); }
+    else if (has('fly')) { scene = Battle; scene.enter({ fly: true }); }
+    else if (has('dungeon')) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
+    else if (has('tutorial')) { tutorialActive = true; scene = Battle; scene.enter({ arena: 'tutorial', tutorial: true, playerTeam: [{ species: 'PROTECTOR', level: 14, hp: null, exp: 0 }], enemy: { species: 'GIANT', level: 16, isGiant: true, trainer: 'COLOSSUS' } }); }
+    else if (has('battle')) { scene = Battle; scene.enter({}); }
+    else if (has('story')) { scene = Story; scene.enter({ phase: 'wake' }); }
+    else if (has('faint')) { scene = Story; scene.enter({ phase: 'faint' }); }
+    else if (has('name')) { scene = NameEntry; scene.enter({ mode: 'create', onDone: () => toOverworld('intro') }); }
+    else if (has('title')) { scene = TitleMenu; scene.enter({}); }
+    else if (has('overworld')) { scene = Overworld; scene.enter({}); }
+    else { scene = Intro; scene.enter({}); }   // default boot: the opening cinematic
     applyGlInset(scene === Battle);
+    const reg = SCENES();
+    sceneId = Object.keys(reg).find((k) => reg[k] === scene) || 'overworld';
 
     requestAnimationFrame((now) => { last = now; requestAnimationFrame(loop); });
   }
 
-  return { boot, save, handle, toBattle, toDungeon, toOverworld, onBattleEnd };
+  return {
+    boot, handle,
+    get save() { return save; },
+    get activeSlot() { return activeSlot; },
+    get sceneName() { return sceneId; },
+    toBattle, toDungeon, toOverworld, onBattleEnd,
+    toTitle, toStory, toTutorialBattle, toNameEntry,
+    startNewGame, continueGame, onTutorialBattleEnd, afterFaint,
+    setLetterbox, setBlur, autosave,
+  };
 })();
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

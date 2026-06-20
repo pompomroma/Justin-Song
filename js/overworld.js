@@ -43,6 +43,11 @@ const Overworld = (() => {
   let cardT = 0, hintT = 0, t = 0;
   let fireflyT = 0, emberT = 0, swirlT = 0;
   let partyView = false, partyCheckCursor = 0; // C opens a read-only party check
+  // O opens an options overlay (rename / difficulty / save / save codes)
+  let optionsView = false, optMode = 'main', optCursor = 0, diffCursor = 2;
+  let notice = '', noticeT = 0;
+  const OPTIONS = ['Rename', 'Difficulty', 'Save', 'Export', 'Import', 'Close'];
+  function toast(msg) { notice = msg; noticeT = 2.6; }
 
   // read-only party rows for the overworld party check
   function savePartyRows() {
@@ -134,9 +139,20 @@ const Overworld = (() => {
             [hero.pos[0], 1.0, hero.pos[2]], 46);
     dialogue = null;
     pendingAction = null;
+    optionsView = false; optMode = 'main'; notice = ''; noticeT = 0;
     cardT = params.result || params.fromDungeon ? 0 : 4.2;
     hintT = params.result || params.fromDungeon ? 0 : 9;
     t = 0;
+    // opening: the amnesiac wakes in the grove — voiced monologue, then names
+    // himself in dialogue, while the cinematic letterbox slowly retracts.
+    if (params.result === 'intro') {
+      if (Game.setLetterbox) { Game.setLetterbox(1, 99, true); Game.setLetterbox(0, 0.5); }
+      const nm = (Game.save && Game.save.name) || 'AEGIS';
+      startDialogue([BData.STORY.faintAgain, BData.STORY.nameBeatPre + nm + BData.STORY.nameBeatPost], null, true);
+      hintT = 8;
+    } else if (Game.setLetterbox) {
+      Game.setLetterbox(0, 6);
+    }
   }
 
   // nearest interactable (npc or portal) within reach, or null
@@ -151,9 +167,9 @@ const Overworld = (() => {
     return best;
   }
 
-  function startDialogue(lines, onDone) {
-    dialogue = { lines: lines.slice(), idx: 0, tw: UI.typewriter(), onDone };
-    dialogue.tw.set(lines[0]);
+  function startDialogue(lines, onDone, voiced) {
+    dialogue = { lines: lines.slice(), idx: 0, tw: UI.typewriter(), onDone, voiced: !!voiced };
+    dialogue.tw.set(lines[0], 860, { voiced: !!voiced });
     Sfx.play('confirm');
   }
 
@@ -176,13 +192,90 @@ const Overworld = (() => {
     }
   }
 
+  // copy a loaded/imported save into the live save (Game.save is a getter, so
+  // we mutate the object it returns in place)
+  function applyLoadedSave(sv) {
+    const s = Game.save;
+    s.name = sv.name; s.difficulty = sv.difficulty; s.party = sv.party;
+    s.npcs = sv.npcs; s.bossBeaten = sv.bossBeaten; s.bossCaptured = sv.bossCaptured; s.battles = sv.battles;
+    Game.autosave();
+  }
+
+  function applyOption(label) {
+    if (label === 'Close') { optionsView = false; Sfx.play('cursor'); return; }
+    if (label === 'Rename') {
+      optionsView = false;
+      Game.toNameEntry('rename', (nm) => { Game.save.name = nm; Game.autosave(); Game.toOverworld(); });
+      return;
+    }
+    if (label === 'Difficulty') { optMode = 'diff'; diffCursor = (Game.save.difficulty || 3) - 1; Sfx.play('cursor'); return; }
+    if (label === 'Save') { Game.autosave(); Sfx.play('confirm'); toast(BData.MSG.saved); return; }
+    if (label === 'Export') {
+      const code = (typeof Save !== 'undefined') ? Save.exportCode(Game.save) : '';
+      let copied = false;
+      try { if (typeof navigator !== 'undefined' && navigator.clipboard) { navigator.clipboard.writeText(code); copied = true; } } catch (e) { /* blocked */ }
+      if (typeof Cloud !== 'undefined' && Cloud.available()) Cloud.push(Game.save.name || 'AEGIS', Game.save);
+      Sfx.play('confirm'); toast(copied ? BData.MSG.codeCopied : 'Save code ready.');
+      return;
+    }
+    if (label === 'Import') {
+      Sfx.play('confirm');
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+          navigator.clipboard.readText().then((txt) => {
+            const sv = (typeof Save !== 'undefined') ? Save.importCode(txt) : null;
+            if (sv) { applyLoadedSave(sv); toast(BData.MSG.codePasted); } else toast(BData.MSG.codeBad);
+          }).catch(() => toast(BData.MSG.codeBad));
+          return;
+        }
+      } catch (e) { /* blocked */ }
+      toast(BData.MSG.codeBad);
+    }
+  }
+
+  function updateOptions() {
+    if (optMode === 'diff') {
+      if (Input.pressed('down')) { diffCursor = (diffCursor + 1) % 5; Sfx.play('cursor'); }
+      if (Input.pressed('up')) { diffCursor = (diffCursor + 4) % 5; Sfx.play('cursor'); }
+      if (Input.pressed('confirm')) { Game.save.difficulty = diffCursor + 1; Game.autosave(); Sfx.play('confirm'); toast(BData.DIFFICULTY[diffCursor + 1].name + ' set'); optMode = 'main'; }
+      else if (Input.pressed('back')) { Sfx.play('cursor'); optMode = 'main'; }
+      return;
+    }
+    if (Input.pressed('down')) { optCursor = (optCursor + 1) % OPTIONS.length; Sfx.play('cursor'); }
+    if (Input.pressed('up')) { optCursor = (optCursor + OPTIONS.length - 1) % OPTIONS.length; Sfx.play('cursor'); }
+    if (Input.pressed('confirm')) applyOption(OPTIONS[optCursor]);
+    else if (Input.pressed('back') || Input.pressed('options')) { optionsView = false; Sfx.play('cursor'); }
+  }
+
+  function drawOptions(ctx) {
+    UI.panel(ctx, 300, 116, 360, 312, 16);
+    PFont.draw(ctx, 'OPTIONS', 338, 130, { scale: 2, color: '#33343c', outline: null });
+    if (optMode === 'diff') {
+      for (let i = 0; i < 5; i++) {
+        const d = BData.DIFFICULTY[i + 1], y = 162 + i * 46, sel = i === diffCursor;
+        UI.para(ctx, 322, y, 316, 40, 8); ctx.fillStyle = sel ? 'rgba(60,86,58,0.92)' : 'rgba(38,42,52,0.85)'; ctx.fill();
+        PFont.draw(ctx, d.id + ' ' + d.name, 336, y + 6, { scale: 2, color: '#ffffff' });
+        if (Game.save.difficulty === i + 1) PFont.draw(ctx, 'ON', 600, y + 6, { scale: 2, color: '#9fd0ff' });
+        PFont.draw(ctx, d.blurb, 336, y + 24, { scale: 1, color: '#bcd0e6' });
+      }
+      PFont.draw(ctx, 'E: Set   X: Back', 336, 400, { scale: 2, color: '#6b5d20', outline: null });
+    } else {
+      for (let i = 0; i < OPTIONS.length; i++) {
+        const y = 158 + i * 40, sel = i === optCursor;
+        UI.para(ctx, 322, y, 316, 34, 8); ctx.fillStyle = sel ? 'rgba(46,78,116,0.92)' : 'rgba(38,42,52,0.85)'; ctx.fill();
+        PFont.draw(ctx, OPTIONS[i], 336, y + 7, { scale: 2, color: '#ffffff' });
+      }
+      PFont.draw(ctx, 'E: Pick   X: Close', 336, 402, { scale: 2, color: '#6b5d20', outline: null });
+    }
+  }
+
   function updateDialogue(dt) {
     dialogue.tw.update(dt);
     if (Input.pressed('confirm') || Input.mouse.clicked) {
       if (!dialogue.tw.done()) { dialogue.tw.skip(); return; }
       dialogue.idx++;
       if (dialogue.idx < dialogue.lines.length) {
-        dialogue.tw.set(dialogue.lines[dialogue.idx]);
+        dialogue.tw.set(dialogue.lines[dialogue.idx], 860, { voiced: dialogue.voiced });
         Sfx.play('blip');
       } else {
         const done = dialogue.onDone;
@@ -197,6 +290,9 @@ const Overworld = (() => {
     t += dt;
     if (cardT > 0) cardT -= dt;
     if (hintT > 0) hintT -= dt;
+    if (noticeT > 0) noticeT -= dt;
+
+    if (optionsView) { updateOptions(dt); moving = false; Cam.follow(hero.pos, camYaw, { dist: 4.4, height: 2.3 }, dt); Cam.update(dt); return; }
 
     if (partyView) { // read-only party check (paused)
       const n = Math.max(1, Game.save.party.length);
@@ -245,6 +341,7 @@ const Overworld = (() => {
       }
       const near = nearest();
       if (Input.pressed('party')) { partyView = true; partyCheckCursor = 0; Sfx.play('confirm'); }
+      else if (Input.pressed('options')) { optionsView = true; optMode = 'main'; optCursor = 0; diffCursor = ((Game.save.difficulty || 3) - 1); Sfx.play('confirm'); }
       else if (near && Input.pressed('confirm')) interact(near);
     }
 
@@ -291,10 +388,20 @@ const Overworld = (() => {
     Gfx.drawDynamic(pd.data, pd.count);
   }
 
+  function drawToast(ctx) {
+    if (noticeT <= 0 || !notice) return;
+    const w = PFont.width(notice, 2) + 28;
+    ctx.fillStyle = 'rgba(14,16,22,0.85)';
+    UI.para(ctx, 480 - w / 2, 66, w, 30, 8); ctx.fill();
+    PFont.drawC(ctx, notice, 480, 74, { scale: 2, color: '#f8e0c8' });
+  }
+
   function renderUi(ctx) {
+    if (optionsView) { drawOptions(ctx); drawToast(ctx); return; }
     if (partyView) { UI.partyPanel(ctx, savePartyRows(), partyCheckCursor, t, false); return; }
     if (cardT > 0) UI.locationCard(ctx, 'WHISPER GROVE', M3.clamp(cardT, 0, 1));
-    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk / Confirm', 'C: Party   M: Mute']);
+    if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk   C: Party', 'O: Options   M: Mute']);
+    drawToast(ctx);
     if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }
     if (Fx.transitioning()) return;
     const near = nearest();

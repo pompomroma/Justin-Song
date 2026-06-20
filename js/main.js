@@ -38,17 +38,29 @@ const Game = (() => {
   let showStats = true;
 
   // hp: null means "full HP" (resolved against statsFor at battle start)
-  const save = {
-    party: [
-      { species: 'PIXLIT', level: 10, hp: 17, exp: 0 }, // worn from the journey
-      { species: 'THORNLET', level: 9, hp: null, exp: 0 },
-      { species: 'EMBERIK', level: 9, hp: null, exp: 0 },
-    ],
-    npcs: {},            // npcId -> true once that trainer is beaten
-    bossBeaten: false,
-    bossCaptured: false,
-    battles: 0,
-  };
+  function makeDefaultSave(difficulty) {
+    return {
+      name: '',
+      difficulty: difficulty || 3,
+      party: [
+        { species: 'PIXLIT', level: 10, hp: 17, exp: 0 }, // worn from the journey
+        { species: 'THORNLET', level: 9, hp: null, exp: 0 },
+        { species: 'EMBERIK', level: 9, hp: null, exp: 0 },
+      ],
+      npcs: {},            // npcId -> true once that trainer is beaten
+      bossBeaten: false,
+      bossCaptured: false,
+      battles: 0,
+    };
+  }
+  let save = makeDefaultSave();   // swapped wholesale on new-game / continue
+  let activeSlot = 0;             // 0 = none (debug); 1..3 = a persisted slot
+  let tutorialActive = false;     // routes the tutorial battle end -> Story:faint
+  let nameEntryCfg = null;
+
+  function autosave() {
+    if (activeSlot && typeof Save !== 'undefined') Save.write(activeSlot, save);
+  }
 
   function handle(name) {
     if (!handles[name]) handles[name] = Gfx.upload(Models.get(name));
@@ -74,10 +86,30 @@ const Game = (() => {
     }
   }
 
+  // ----- cinematic letterbox (animated bars) + GL-canvas blur -----
+  let letterCur = 0, letterTarget = 0, letterRate = 6;
+  function setLetterbox(target, rate, instant) {
+    letterTarget = M3.clamp(target, 0, 1);
+    if (rate) letterRate = rate;
+    if (instant) letterCur = letterTarget;
+  }
+  function setBlur(px) {
+    if (glCanvas) glCanvas.style.filter = px > 0.05 ? ('blur(' + (+px).toFixed(2) + 'px)') : '';
+  }
+
+  // scene registry — switchNow(name) is generic over every scene
+  const SCENES = () => ({
+    intro: Intro, title: TitleMenu, story: Story, name: NameEntry,
+    battle: Battle, overworld: Overworld, viewer: Viewer,
+  });
+
+  let sceneId = 'intro';            // current scene key (exposed for tests)
   function switchNow(name, params) {
     if (scene && scene.exit) scene.exit();
-    scene = name === 'battle' ? Battle : Overworld;
-    applyGlInset(name === 'battle');
+    setBlur(0);
+    sceneId = SCENES()[name] ? name : 'overworld';
+    scene = SCENES()[name] || Overworld;
+    applyGlInset(scene === Battle);
     scene.enter(params || {});
   }
 
@@ -97,12 +129,48 @@ const Game = (() => {
     Fx.transition('fade', () => switchNow('overworld', Object.assign({ result }, ctx || {})), null);
   }
 
+  // ----- opening-sequence hand-offs -----
+  function toTitle() { Fx.transition('fade', () => switchNow('title', {}), null); }
+  function toStory(phase) { Fx.transition('fade', () => switchNow('story', { phase }), null); }
+  function toTutorialBattle() {
+    tutorialActive = true;
+    save.battles++;
+    Sfx.play('spawn');
+    Fx.transition('battleIn', () => switchNow('battle', {
+      arena: 'tutorial', tutorial: true,
+      playerTeam: [{ species: 'PROTECTOR', level: 14, hp: null, exp: 0 }],
+      enemy: { species: 'GIANT', level: 16, isGiant: true, trainer: 'COLOSSUS' },
+    }), null);
+  }
+  function toNameEntry(mode, onDone) {
+    Fx.transition('fade', () => switchNow('name', { mode, onDone, initial: save.name || '' }), null);
+  }
+
+  function startNewGame(difficulty, slot) {
+    save = makeDefaultSave(difficulty);
+    activeSlot = slot || 1;
+    autosave();
+    toStory('wake');
+  }
+  function continueGame(slot) {
+    const loaded = (typeof Save !== 'undefined') ? Save.read(slot) : null;
+    if (loaded) { save = loaded; activeSlot = slot; toOverworld('continue'); }
+    else startNewGame(3, slot);
+  }
+  // the tutorial battle always hands off to the faint cutscene (win OR lose)
+  function onTutorialBattleEnd() { tutorialActive = false; toStory('faint'); }
+  // after the faint: the amnesiac names himself, then enters the grove
+  function afterFaint() {
+    toNameEntry('create', (nm) => { save.name = nm; autosave(); toOverworld('intro'); });
+  }
+
   // called by Battle.endBattle: record progress, then return to the overworld
   function onBattleEnd(result, enemy) {
     if (result === 'win' || result === 'capture') {
       if (enemy && enemy.isBoss) { save.bossBeaten = true; if (result === 'capture') save.bossCaptured = true; }
       else if (enemy && enemy.npcId) save.npcs[enemy.npcId] = true;
     }
+    autosave();
     toOverworld(result, { fromDungeon: !!(enemy && enemy.isBoss) });
   }
 
@@ -237,7 +305,10 @@ const Game = (() => {
   // ---------------------------------------------------------------- loop
   function update(dt) {
     Fx.update(dt);
-    Input.setTouchLayout(scene === Battle ? 'battle' : 'overworld');
+    // D-pad walking only in the overworld; every other scene (battle + the
+    // menu/cutscene scenes) uses the tap-to-select + A/B layout.
+    Input.setTouchLayout(scene === Overworld ? 'overworld' : 'battle');
+    letterCur += (letterTarget - letterCur) * M3.clamp(dt * letterRate, 0, 1);
     if (Input.pressed('mute')) Sfx.toggleMute();
     if (Input.pressed('stats')) showStats = !showStats;
     if (scene && scene.update) scene.update(dt);
@@ -259,6 +330,14 @@ const Game = (() => {
       ctx.fillStyle = 'rgb(' + (fc[0] * 255 | 0) + ',' + (fc[1] * 255 | 0) + ',' + (fc[2] * 255 | 0) + ')';
       ctx.fillRect(0, 0, UI_VW, UI_VH);
       ctx.globalAlpha = 1;
+    }
+    // cinematic letterbox bars (cutscenes raise them; battle lowers them; the
+    // overworld retracts them slowly as gameplay begins)
+    if (letterCur > 0.002) {
+      const bar = Math.round(letterCur * 70);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, UI_VW, bar);
+      ctx.fillRect(0, UI_VH - bar, UI_VW, bar);
     }
     Fx.transitionDraw(ctx);
     if (Sfx.isMuted())
@@ -326,17 +405,35 @@ const Game = (() => {
     resize();
 
     const hash = location.hash;
-    if (hash.indexOf('viewer') >= 0) { scene = Viewer; scene.enter(); }
-    else if (hash.indexOf('fly') >= 0) { scene = Battle; scene.enter({ fly: true }); }
-    else if (hash.indexOf('dungeon') >= 0) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
-    else if (hash.indexOf('battle') >= 0) { scene = Battle; scene.enter({}); }
-    else { scene = Overworld; scene.enter({}); }
+    const has = (s) => hash.indexOf(s) >= 0;
+    if (has('viewer')) { scene = Viewer; scene.enter(); }
+    else if (has('fly')) { scene = Battle; scene.enter({ fly: true }); }
+    else if (has('dungeon')) { scene = Battle; scene.enter({ arena: 'dungeon', enemy: { species: 'VORNETH', level: 16, isBoss: true, trainer: 'VORNETH' } }); }
+    else if (has('tutorial')) { tutorialActive = true; scene = Battle; scene.enter({ arena: 'tutorial', tutorial: true, playerTeam: [{ species: 'PROTECTOR', level: 14, hp: null, exp: 0 }], enemy: { species: 'GIANT', level: 16, isGiant: true, trainer: 'COLOSSUS' } }); }
+    else if (has('battle')) { scene = Battle; scene.enter({}); }
+    else if (has('story')) { scene = Story; scene.enter({ phase: 'wake' }); }
+    else if (has('faint')) { scene = Story; scene.enter({ phase: 'faint' }); }
+    else if (has('name')) { scene = NameEntry; scene.enter({ mode: 'create', onDone: () => toOverworld('intro') }); }
+    else if (has('title')) { scene = TitleMenu; scene.enter({}); }
+    else if (has('overworld')) { scene = Overworld; scene.enter({}); }
+    else { scene = Intro; scene.enter({}); }   // default boot: the opening cinematic
     applyGlInset(scene === Battle);
+    const reg = SCENES();
+    sceneId = Object.keys(reg).find((k) => reg[k] === scene) || 'overworld';
 
     requestAnimationFrame((now) => { last = now; requestAnimationFrame(loop); });
   }
 
-  return { boot, save, handle, toBattle, toDungeon, toOverworld, onBattleEnd };
+  return {
+    boot, handle,
+    get save() { return save; },
+    get activeSlot() { return activeSlot; },
+    get sceneName() { return sceneId; },
+    toBattle, toDungeon, toOverworld, onBattleEnd,
+    toTitle, toStory, toTutorialBattle, toNameEntry,
+    startNewGame, continueGame, onTutorialBattleEnd, afterFaint,
+    setLetterbox, setBlur, autosave,
+  };
 })();
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

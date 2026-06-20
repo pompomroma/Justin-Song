@@ -442,6 +442,73 @@ const Models = (() => {
     return { g, colors, s: 0.13, jitter: 0.1 };
   }
 
+  // PROTECTOR (AEGIS) — a sleek guardian beast: steel-blue plated body,
+  // glowing cyan crest + maw, four strong legs, swept tail. Faces +z (the
+  // player first sees its back shielding him in the wake cutscene). ~1.6u.
+  function protector() {
+    const g = Vox.grid(18, 20, 26);
+    const C = { body: 0, body2: 1, plate: 2, glow: 3, eye: 4, claw: 5, mane: 6 };
+    const colors = pal('#2e3c54', '#3c4e6c', '#23304a', '#46e6ff', '#eafcff', '#161d2c', '#2aa6c8');
+    // four legs (author the right pair; mirrorX makes the left). front near +z
+    for (const z of [5, 18]) {
+      g.box(11, 0, z, 13, 5, z + 2, C.body2);
+      g.box(11, 0, z, 13, 0, z + 2, C.claw);
+    }
+    g.ellipsoid(9, 9.5, 13, 5.2, 4.4, 8.0, C.body);   // barrel body
+    g.ellipsoid(9, 6.5, 13, 4.4, 3.0, 7.2, C.body2);  // belly
+    g.ellipsoid(9, 9.5, 20, 4.0, 4.0, 2.2, C.plate);  // chest plate
+    g.ellipsoid(9, 9.6, 21.2, 1.5, 1.7, 1.0, C.glow); // glowing chest core
+    // neck + head forward (+z)
+    g.box(9, 9, 20, 11, 13, 23, C.body);
+    g.ellipsoid(9, 13, 23, 3.0, 2.7, 2.6, C.body);
+    g.box(9, 11, 24, 11, 13, 25, C.plate);            // muzzle
+    g.ellipsoid(9, 11.4, 25, 1.2, 0.9, 0.7, C.glow);  // glowing maw
+    g.set(11, 14, 24, C.eye);                          // right eye -> mirror
+    g.set(13, 16, 22, C.claw); g.set(13, 17, 22, C.claw); // right ear
+    // glowing crest spikes along the spine
+    for (let z = 10; z <= 22; z += 2) { g.set(9, 14, z, C.mane); g.set(9, 15, z, C.glow); }
+    // swept tail (-z) with a glowing tip
+    g.box(9, 9, 2, 10, 11, 5, C.body);
+    g.set(9, 12, 1, C.glow); g.set(9, 11, 1, C.glow);
+    g.mirrorX();
+    return { g, colors, s: 0.08, jitter: 0.06 };
+  }
+
+  // GIANT (COLOSSUS) — a colossal, majestic horned & winged beast with a
+  // blazing maw; the tutorial's overwhelming opponent. Faces +z. Built
+  // large (~4.7u — it towers; the camera tilts up at it).
+  function giant() {
+    const g = Vox.grid(30, 36, 24);
+    const C = { hide: 0, hide2: 1, plate: 2, horn: 3, eye: 4, claw: 5, wing: 6, maw: 7 };
+    const colors = pal('#3a2f5e', '#4a3c74', '#efe6ff', '#cfa63a', '#ffe27a', '#1a1330', '#2c2350', '#ffd24a');
+    g.ellipsoid(15, 18, 12, 8, 10, 6.4, C.hide);      // colossal torso
+    g.ellipsoid(15, 12, 12, 6.8, 6.6, 6.0, C.hide2);  // belly
+    g.ellipsoid(15, 17, 17.4, 3.2, 3.4, 1.4, C.plate);// chest plate
+    g.ellipsoid(15, 17, 18.0, 1.9, 2.1, 0.9, C.maw);  // blazing chest maw
+    // right wing (swept membrane, low-z behind the shoulder)
+    g.box(21, 14, 4, 29, 30, 5, C.wing);
+    g.box(23, 27, 4, 29, 33, 5, C.wing);
+    g.box(22, 9, 4, 27, 14, 5, C.wing);
+    g.set(25, 22, 5, C.maw); g.set(27, 28, 5, C.maw);
+    // right arm + claw
+    g.ellipsoid(22, 22, 12, 3.8, 3.8, 3.8, C.hide);
+    g.box(23, 9, 11, 26, 22, 14, C.hide);
+    g.box(24, 5, 11, 26, 8, 15, C.claw);
+    g.set(26, 4, 11, C.claw); g.set(26, 4, 15, C.claw);
+    g.box(18, 0, 11, 22, 7, 15, C.hide2);             // right leg
+    g.box(18, 0, 15, 22, 0, 17, C.claw);
+    g.ellipsoid(15, 26, 14, 4.4, 4.0, 4.2, C.hide);   // head
+    g.box(15, 24, 17, 17, 26, 18, C.plate);           // jaw / muzzle (right)
+    g.ellipsoid(15, 25, 18.2, 1.6, 1.2, 0.8, C.maw);  // glowing maw
+    g.set(17, 27, 18, C.eye);                          // right eye -> mirror
+    g.box(15, 30, 13, 15, 34, 13, C.horn);            // crown of horns
+    g.box(18, 29, 13, 18, 33, 13, C.horn);
+    g.box(21, 28, 13, 21, 31, 13, C.horn);
+    for (let y = 8; y < 26; y += 2) g.set(15, y, 18, C.maw); // spine glow
+    g.mirrorX();
+    return { g, colors, s: 0.13, jitter: 0.09 };
+  }
+
   // obsidian spire — jagged dungeon scatter
   function spire() {
     const g = Vox.grid(10, 20, 10);
@@ -518,7 +585,7 @@ const Models = (() => {
 
   const BUILDERS = {
     pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
-    vorneth, vorneth_x, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
+    vorneth, vorneth_x, protector, giant, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,

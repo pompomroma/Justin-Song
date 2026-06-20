@@ -110,6 +110,12 @@ const Sfx = (() => {
       tone({ f0: 130, f1: 28, dur: 0.4, vol: 0.4, type: 'sine' });
     },
     faint:   () => tone({ f0: 600, f1: 70, dur: 0.7, vol: 0.2, type: 'square' }),
+    giantbeam: () => { // colossal sustained void beam (the giant's intro attack)
+      noise({ f0: 220, f1: 60, dur: 1.1, vol: 0.5, ftype: 'lowpass', q: 1.2 });
+      tone({ f0: 880, f1: 200, dur: 1.0, vol: 0.16, type: 'sawtooth' });
+      tone({ f0: 70, f1: 40, dur: 1.1, vol: 0.34, type: 'sine' });
+      noise({ f0: 1800, f1: 5000, dur: 0.5, vol: 0.1, ftype: 'highpass', delay: 0.12 });
+    },
     heal:    () => {
       [523, 659, 784].forEach((f, i) => tone({ f0: f, dur: 0.12, vol: 0.11, delay: i * 0.09, type: 'sine' }));
       noise({ f0: 2000, f1: 4500, dur: 0.35, vol: 0.05, ftype: 'highpass' });
@@ -146,6 +152,29 @@ const Sfx = (() => {
     ABYSSNOVA: () => { noise({ f0: 800, f1: 48, dur: 0.7, vol: 0.6, ftype: 'lowpass', q: 1.2 }); tone({ f0: 80, f1: 26, dur: 0.7, vol: 0.4, type: 'sine' }); [330, 466, 622].forEach((f, i) => tone({ f0: f, dur: 0.6, vol: 0.1, type: 'sawtooth', delay: i * 0.02 })); },
     AWAKEN: () => { tone({ f0: 120, f1: 900, dur: 0.8, vol: 0.2, type: 'sawtooth' }); tone({ f0: 60, f1: 200, dur: 0.8, vol: 0.2, type: 'sine' }); noise({ f0: 400, f1: 4000, dur: 0.8, vol: 0.12, ftype: 'bandpass', q: 1 }); },
   };
+
+  // synthesized "voice" blip — a short vowel-ish formant chirp keyed off the
+  // character, fired per-letter by the typewriter so spoken lines read as
+  // BOTH voice and text. (Real TTS is impossible offline / zero-dependency.)
+  function voice(ch) {
+    if (!ctx || !ch || ch === ' ' || ch === '\n') return;
+    const code = ch.charCodeAt(0);
+    const base = 128 + (code % 13) * 10;
+    const t0 = ctx.currentTime;
+    for (const det of [0, 5]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(base + det, t0);
+      o.frequency.exponentialRampToValueAtTime((base + det) * 1.16, t0 + 0.05);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 700 + (code % 5) * 130; f.Q.value = 6;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.078);
+      o.connect(f); f.connect(g); g.connect(master);
+      o.start(t0); o.stop(t0 + 0.1);
+    }
+  }
 
   // soft night-forest bed: filtered noise pad + scheduled cricket chirps
   function startAmbience() {
@@ -217,6 +246,20 @@ const Sfx = (() => {
       lead: [62, 65, 69, 74, 73, 69, 65, 62, 70, 74, 77, 74, 70, 69, 65, 62,
              67, 70, 74, 79, 77, 74, 70, 67, 69, 73, 76, 81, 80, 76, 73, 69],
     },
+    title: { // bright, anthemic retro-opening fanfare — C G Am F
+      bpm: 132,
+      chords: [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]],
+      bass: [36, 31, 33, 29],
+      lead: [72, 76, 79, 76, 74, 72, 71, 72, 67, 71, 74, 71, 69, 67, 66, 67,
+             69, 72, 76, 72, 74, 76, 79, 84, 83, 79, 76, 72, 74, 71, 67, 72],
+    },
+    tutorial: { // tense, driving — Am F Dm E
+      bpm: 150,
+      chords: [[57, 60, 64], [53, 57, 60], [50, 53, 57], [52, 56, 59]],
+      bass: [45, 41, 38, 40],
+      lead: [69, 72, 71, 69, 67, 69, 72, 74, 65, 69, 68, 65, 64, 65, 69, 72,
+             62, 65, 69, 74, 72, 69, 65, 62, 64, 68, 71, 76, 75, 71, 68, 64],
+    },
   };
   function scheduleMusic() {
     music.timer = null;
@@ -261,6 +304,7 @@ const Sfx = (() => {
     unlock,
     play: (name) => { if (ctx && FX[name]) FX[name](); },
     move: (id) => { if (ctx) (MOVEFX[id] || FX.impact)(); },
+    voice,
     startMusic, stopMusic,
     toggleMute: () => {
       muted = !muted;

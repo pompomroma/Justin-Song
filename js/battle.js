@@ -46,6 +46,18 @@ const Battle = (() => {
     ambient: [0.54, 0.46, 0.66],
   };
 
+  // Tutorial: the colossal GIANT stands far back; the camera shoots low and
+  // tilted UP at it (same towering framing as the dungeon boss).
+  const GIANT_POS = [2.4, 0, 5.6];
+  const TUTORIAL_SHOT = { pos: [-3.40, 0.95, -3.20], look: [2.10, 2.60, 4.20], fov: 60 };
+  const TUTORIAL_ENV = {
+    sky: M3.hex('#0a0a18'),
+    fog: M3.hex('#161028'), fogNear: 10, fogFar: 34,
+    lightDir: M3.normalize([], [-0.3, -0.7, -0.2]),
+    lightCol: [0.7, 0.7, 0.95],
+    ambient: [0.42, 0.44, 0.58],
+  };
+
   const SPAWN_THEMES = {
     PIXLIT:   [[1, 1, 1], [1, 0.55, 0.8], [0.7, 0.9, 1]],
     THORNLET: [[1, 1, 1], [0.55, 0.95, 0.4], [0.3, 0.75, 0.3]],
@@ -53,6 +65,8 @@ const Battle = (() => {
     MAGMULE:  [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
     VORNETH:  [[1, 1, 1], [0.72, 0.34, 1], [0.5, 0.12, 0.7]],
     VORNETH_X:[[1, 1, 1], [0.92, 0.4, 1], [0.6, 0.15, 0.85]],
+    PROTECTOR:[[1, 1, 1], [0.3, 0.85, 1], [0.15, 0.5, 0.8]],
+    GIANT:    [[1, 1, 1], [1, 0.85, 0.4], [0.7, 0.4, 1]],
   };
   const themeOf = (id) => SPAWN_THEMES[id] || SPAWN_THEMES.MAGMULE;
   const modelOf = (id) => id.toLowerCase();
@@ -60,7 +74,9 @@ const Battle = (() => {
   // ----------------------------------------------------------- state
   let staticH = null;          // merged grove scenery handle
   let dungeonH = null;         // merged dungeon scenery handle
-  let arena = 'grove';         // 'grove' | 'dungeon'
+  let tutorialH = null;        // merged tutorial scenery handle
+  let arena = 'grove';         // 'grove' | 'dungeon' | 'tutorial'
+  let tutorial = false;        // opening tutorial battle (commands the protector)
   let curEnv = ENV, curStatic = null, defShot = DEFAULT_SHOT;
   let curEnemy = null;         // descriptor passed to enter() (npcId/trainer/isBoss)
   let ashT = 0, riftT = 0;     // dungeon ambient timers
@@ -168,13 +184,24 @@ const Battle = (() => {
   const firstAliveIdx = () => pParty.findIndex((m, i) => i !== activeIdx && m.hp > 0);
   const enemyAlive = () => eParty.some((m) => m.hp > 0);
 
+  // active opponent stage position by arena
+  const enemyPos = () => (arena === 'dungeon' ? BOSS_POS : (arena === 'tutorial' ? GIANT_POS : M_POS));
+  // current difficulty tier (1..5); the scripted giant/boss ignore it
+  const curTier = () => ((Game.save && Game.save.difficulty) || 3);
+
   function makeEnemy(species, level, isBoss) {
     const sp = BData.SPECIES[species];
+    const isGiant = !!sp.giant;
     const stats = BData.statsFor(species, level);
-    const epp = {}; for (const id of sp.moves) epp[id] = BData.MOVES[id].pp;
+    // attack-pattern diversity scales with difficulty (story foes keep all moves)
+    let moves = sp.moves.slice();
+    if (!isBoss && !isGiant && !tutorial)
+      moves = BData.enemyMovepool(moves, (BData.DIFFICULTY[curTier()] || BData.DIFFICULTY[3]).moves);
+    const epp = {}; for (const id of sp.moves) epp[id] = BData.MOVES[id].pp; // full PP table (giant gates moves by form)
     return { id: species, baseId: species, name: sp.name, level, stats,
              hp: stats.maxHp, displayHp: stats.maxHp, drainRate: 60, atkStage: 0,
-             moves: sp.moves.slice(), epp, isBoss: !!isBoss, form: 0, threshold: 0.55 };
+             moves, epp, isBoss: !!isBoss, isGiant, enraged: false, form: 0,
+             threshold: isGiant ? 0.5 : 0.55 };
   }
 
   // camera shots ----------------------------------------------------------
@@ -797,7 +824,7 @@ const Battle = (() => {
         look: [u.pos[0], up * 0.92, u.pos[2]], fov: 53, ease: 'inOutCubic' },
     ]);
   }
-  const bossSwing = (s) => (arena === 'dungeon' && s === 'E');
+  const bossSwing = (s) => ((arena === 'dungeon' || arena === 'tutorial') && s === 'E');
 
   /* VOID LANCE — boss-tier beam, intensified: ground-crack charge, a
      FOUR-layer lance (halo + glow + mid + searing core), raking void
@@ -946,9 +973,18 @@ const Battle = (() => {
     } else eState.epp[moveId] -= 1;
     if (move.effect === 'transform') { yield* transformSeq(s); return; }
     const res = move.power
-      ? BData.damage({ level: st.level, atk: st.stats.atk, atkStage: st.atkStage },
-                     { def: os.stats.def, defStage: 0 }, move, rngBattle)
+      ? BData.damage({ level: st.level, atk: st.stats.atk, atkStage: st.atkStage, type: BData.SPECIES[st.id].type },
+                     { def: os.stats.def, defStage: 0, type: BData.SPECIES[os.id].type }, move, rngBattle)
       : { dmg: 0, crit: false, miss: rngBattle() * 100 >= move.acc };
+    // telegraphed "charged" special (the giant's wind-up tell before it fires)
+    if (move.telegraph) {
+      yield* say(BData.fmt(BData.MSG.giantCharge, { A: st.name }), { auto: true, hold: 240 });
+      Sfx.play('charge'); Sfx.play('rift');
+      Fx.pulseLight(head(sideActor(s), 0.7), [1, 0.82, 0.4], 2.4, 380, 8);
+      Fx.crackle(head(sideActor(s), 0.7), { n: 5, len: 0.9, colors: [[1, 0.85, 0.4], [1, 1, 1]] });
+      Fx.addTrauma(0.3);
+      yield 360;
+    }
     yield* say(BData.fmt(BData.MSG.used, { A: st.name, M: move.name }), { auto: true, hold: 320 });
     Sfx.move(move.id); // each attack's unique cinematic signature sound
     // electric wind-up: the attacker crackles with energy as the move begins
@@ -969,6 +1005,9 @@ const Battle = (() => {
     } else if (res.crit) {
       yield* say(BData.MSG.crit, { auto: true });
     }
+    // type-effectiveness feedback (teaches the matchup system)
+    if (!res.miss && move.power && res.eff !== undefined && res.eff !== 1)
+      yield* say(res.eff > 1 ? BData.MSG.superEff : BData.MSG.resist, { auto: true });
   }
 
   function* faintSeq(s) {
@@ -1116,6 +1155,81 @@ const Battle = (() => {
     yield* spawnIn(a, themeOf('VORNETH'));
   }
 
+  // ---- difficulty-scaled enemy decision-making ----
+  // the giant's moveset is phase-gated: its telegraphed specials unlock only
+  // once it enrages (phase 2).
+  function enemyMoves() {
+    if (eState.isGiant)
+      return eState.form === 0 ? ['STOMP', 'ROAR'] : ['STOMP', 'GIANTBEAM', 'GNOVA', 'ROAR'];
+    return eState.moves;
+  }
+  function enemyAiCtx() {
+    const sp = BData.SPECIES;
+    return {
+      tier: eState.isGiant ? 4 : curTier(),  // the scripted giant runs a fixed tier
+      atkStage: eState.atkStage,
+      foeHpFrac: pState.hp / pState.stats.maxHp,
+      pp: eState.epp,
+      self: { level: eState.level, atk: eState.stats.atk, atkStage: eState.atkStage, type: sp[eState.id].type },
+      foe: { def: pState.stats.def, defStage: 0, type: sp[pState.id].type, hp: pState.hp, maxHp: pState.stats.maxHp },
+    };
+  }
+  const enemyPick = () => BData.aiPick(enemyMoves(), enemyAiCtx(), rngBattle);
+  const giantReady = () => eState.isGiant && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold;
+
+  // the giant's mid-fight ENRAGE (phase 2) — a roar + stat surge unlocking its
+  // telegraphed charged specials (no model swap; parallels the boss hook).
+  function* giantEnrageSeq(side) {
+    const a = sideActor(side), st = sideState(side);
+    st.form = 1; st.enraged = true;
+    st.atkStage = Math.min(6, st.atkStage + 2);
+    yield* say(BData.fmt(BData.MSG.giantEnrage, { A: st.name }), { auto: true, hold: 220 });
+    if (bossSwing(side)) camBossSwing(side);
+    Sfx.play('roar'); Sfx.play('quake');
+    Fx.flash(150, 0.9, [1, 0.7, 0.4]);
+    Fx.slowmo(520, 0.4);
+    Fx.addTrauma(0.85);
+    Fx.pulseLight(chest(a), [1, 0.72, 0.4], 4.2, 420, 11);
+    a.flashT = 0.55;
+    tw3(a.scl, [1.2, 1.2, 1.2], 300, 'outQuad', () => tw3(a.scl, [1.08, 1.08, 1.08], 400, 'outBack'));
+    Fx.ring([a.pos[0], a.pos[1] + 0.05, a.pos[2]], { r0: 0.3, r1: 3.0, n: 28, life: 0.6, colors: [[1, 0.7, 0.4], [1, 1, 1]], s: 0.09 });
+    Fx.burst(head(a, 0.7), { n: 32, speed: 3.6, colors: [[1, 0.8, 0.4], [1, 1, 1]], life: 0.7, g: -2 });
+    yield 640;
+    camDefault();
+  }
+
+  // a non-boss enemy voluntarily pivots to a better-matched bench mon (tiers 4-5)
+  function* enemySwitchSeq(to) {
+    const th = themeOf(eState.id);
+    yield* say(BData.fmt(BData.MSG.foeRecall, { T: (curEnemy && curEnemy.trainer) || 'The foe', A: eState.name }), { auto: true, hold: 140 });
+    camDefault(400);
+    Sfx.play('charge');
+    Fx.ring(chest(enemy), { r0: 1.0, r1: 0.1, n: 14, life: 0.3, colors: [th[1], [1, 1, 1]], s: 0.05 });
+    recallFx(enemy, chest(enemy), th);
+    tw3(enemy.scl, [0.02, 0.02, 0.02], 240, 'inQuad');
+    enemy.flashT = 0.4;
+    yield 280;
+    enemy.visible = false;
+    eActiveIdx = to; eState = eParty[to];
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
+    enemy.visible = false;
+    yield* say(BData.fmt(BData.MSG.sentOut, { T: (curEnemy && curEnemy.trainer) || 'The foe', M: eState.name }), { auto: true, hold: 140 });
+    yield* spawnIn(enemy, themeOf(eState.id));
+  }
+
+  // decide whether the enemy pivots this turn; returns a generator or null
+  function maybeEnemySwitch() {
+    if (eState.isBoss || eState.isGiant) return null;
+    const sp = BData.SPECIES;
+    const bench = eParty.map((m, i) => ({ idx: i, type: sp[m.id].type, alive: m.hp > 0 })).filter((b) => b.idx !== eActiveIdx);
+    const to = BData.aiShouldSwitch(
+      { type: sp[eState.id].type, hpFrac: eState.hp / eState.stats.maxHp },
+      { type: sp[pState.id].type }, bench, curTier(), rngBattle);
+    if (to < 0 || !eParty[to] || eParty[to].hp <= 0) return null;
+    return enemySwitchSeq(to);
+  }
+
   // enemy's half of a turn. Returns false if the battle ended.
   function* enemyTurn() {
     if (eState.hp <= 0) return true;
@@ -1124,8 +1238,10 @@ const Battle = (() => {
       yield* transformSeq('E');
       return true; // the transformation is the boss's action this turn
     }
-    const mv = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
-    yield* doMove('E', mv);
+    if (giantReady()) { yield* giantEnrageSeq('E'); return true; }
+    const sw = maybeEnemySwitch();
+    if (sw) { yield* sw; return true; }   // pivoting uses the enemy's turn
+    yield* doMove('E', enemyPick());
     if (pState.hp <= 0) {
       yield* faintSeq('P');
       if (othersAlive()) { yield* forcedSwitch(); return true; }
@@ -1217,9 +1333,8 @@ const Battle = (() => {
   function* sendNextEnemy() {
     eActiveIdx = eParty.findIndex((m) => m.hp > 0);
     eState = eParty[eActiveIdx];
-    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
-    enemy = actor(modelOf(eState.id), ePos, YAW_M);
-    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; }
     enemy.visible = false;
     yield* say(BData.fmt(BData.MSG.sentOut, { T: (curEnemy && curEnemy.trainer) || 'The foe', M: eState.name }), { auto: true, hold: 150 });
     yield* spawnIn(enemy, themeOf(eState.id));
@@ -1436,15 +1551,19 @@ const Battle = (() => {
     }
     // attack: both sides act in speed order
     const playerMove = pState.moves[action.idx];
-    const enemyMove = BData.aiPick(eState.moves, { atkStage: eState.atkStage, foeHpFrac: pState.hp / pState.stats.maxHp, pp: eState.epp }, rngBattle);
+    const enemyMove = enemyPick();
     const pFirst = pState.stats.spe === eState.stats.spe ? rngBattle() < 0.5 : pState.stats.spe > eState.stats.spe;
     const order = pFirst ? [['P', playerMove], ['E', enemyMove]] : [['E', enemyMove], ['P', playerMove]];
     for (const [s, mv] of order) {
       if (sideState(s).hp <= 0) continue;
-      // boss reacts by awakening the first time it drops below its threshold
-      if (s === 'E' && eState.isBoss && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
-        yield* transformSeq('E');
-        continue;
+      if (s === 'E') {
+        // boss reacts by awakening the first time it drops below its threshold
+        if (eState.isBoss && eState.form === 0 && eState.hp > 0 && eState.hp < eState.stats.maxHp * eState.threshold) {
+          yield* transformSeq('E'); continue;
+        }
+        if (giantReady()) { yield* giantEnrageSeq('E'); continue; } // giant phase 2
+        const sw = maybeEnemySwitch();
+        if (sw) { yield* sw; continue; }   // pivot to a better matchup instead of attacking
       }
       yield* doMove(s, mv);
       const victim = other(s);
@@ -1464,6 +1583,7 @@ const Battle = (() => {
 
   function* introScript() {
     yield 650; // let the transition reveal finish before the first message
+    if (tutorial) { yield* introTutorial(); return; }
     if (curEnemy && curEnemy.isBoss) { yield* introBoss(); return; }
     yield* say(BData.fmt(BData.MSG.challenge, { T: curEnemy.trainer }));
     yield* say(BData.fmt(BData.MSG.sentOut, { T: curEnemy.trainer, M: eState.name }), { auto: true, hold: 120 });
@@ -1472,6 +1592,19 @@ const Battle = (() => {
     yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
     yield* spawnIn(player, themeOf(pState.id));
     yield 200;
+    backToMenu();
+  }
+
+  // tutorial entrance: the colossal giant looms in; we command the protector
+  function* introTutorial() {
+    yield* say(BData.MSG.giantAppear);
+    Cam.play([{ t: 1200, pos: TUTORIAL_SHOT.pos, look: TUTORIAL_SHOT.look, fov: TUTORIAL_SHOT.fov, ease: 'inOutCubic' }]);
+    yield* spawnInBoss(enemy);
+    yield* say(BData.MSG.giantReveal, { auto: true, hold: 220 });
+    yield 120;
+    yield* say(BData.fmt(BData.MSG.go, { A: pState.name }), { auto: true, hold: 120 });
+    yield* spawnIn(player, themeOf(pState.id));
+    yield 180;
     backToMenu();
   }
 
@@ -1522,6 +1655,9 @@ const Battle = (() => {
   function endBattle(result) {
     state = 'DONE';
     mode = 'none';
+    // the opening tutorial uses a throwaway team (the protector) and always
+    // hands off to the faint cutscene — never touches the saved party.
+    if (tutorial) { Game.onTutorialBattleEnd(result); return; }
     // persist levels/EXP gained, then fully heal the whole party (incl. a
     // monster just captured) after every battle
     for (let i = 0; i < pParty.length && i < Game.save.party.length; i++) {
@@ -1622,6 +1758,33 @@ const Battle = (() => {
     dungeonH = Gfx.upload({ data, count: total });
   }
 
+  // dark dream arena for the opening tutorial: obsidian floor + a ring of spires
+  function buildTutorial() {
+    if (tutorialH) return;
+    const parts = [];
+    const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
+    const ground = Models.groundMesh({
+      radius: 15, dark: true,
+      patches: [
+        { x: P_POS[0], z: P_POS[2], rx: 1.2, rz: 0.9, rot: 0.3 },
+        { x: GIANT_POS[0], z: GIANT_POS[2], rx: 3.2, rz: 3.2, rot: 0 },
+      ],
+    });
+    const r = M3.rng(321);
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + r() * 0.2, rad = 11 + r() * 3;
+      push('spire', [Math.cos(a) * rad, 0, Math.sin(a) * rad], r() * 6.3, 0.7 + r() * 1.0);
+    }
+    let total = ground.count;
+    for (const p of parts) total += p.m.count;
+    const data = new Float32Array(total * 9);
+    data.set(ground.data, 0);
+    let off = ground.count * 9;
+    for (const p of parts)
+      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    tutorialH = Gfx.upload({ data, count: total });
+  }
+
   // ----------------------------------------------------------- scene API
   function enter(params) {
     params = params || {};
@@ -1633,12 +1796,17 @@ const Battle = (() => {
 
     curEnemy = params.enemy || { species: 'MAGMULE', level: 15, trainer: 'Camper REX', npcId: 'rex' };
     arena = params.arena || 'grove';
+    tutorial = !!params.tutorial;
     if (arena === 'dungeon') { buildDungeon(); curStatic = dungeonH; curEnv = DUNGEON_ENV; defShot = DUNGEON_SHOT; }
+    else if (arena === 'tutorial') { buildTutorial(); curStatic = tutorialH; curEnv = TUTORIAL_ENV; defShot = TUTORIAL_SHOT; }
     else { buildStatic(); curStatic = staticH; curEnv = ENV; defShot = DEFAULT_SHOT; }
     ashT = 0.4; riftT = 1.2;
+    if (typeof Game.setLetterbox === 'function') Game.setLetterbox(0, 5); // NORMAL screen during battle
 
-    // build party combat states from the save
-    pParty = Game.save.party.map((m) => {
+    // build party combat states (tutorial overrides the saved party with a
+    // throwaway team — the protector AEGIS)
+    const srcParty = params.playerTeam || Game.save.party;
+    pParty = srcParty.map((m) => {
       const sp = BData.SPECIES[m.species];
       const stats = BData.statsFor(m.species, m.level);
       const hp = m.hp === null || m.hp === undefined ? stats.maxHp : M3.clamp(m.hp, 0, stats.maxHp);
@@ -1650,16 +1818,21 @@ const Battle = (() => {
     activeIdx = Math.max(0, pParty.findIndex((m) => m.hp > 0));
     pState = pParty[activeIdx];
 
-    // enemy party from the descriptor (NPCs field several monsters; boss is one)
-    const team = curEnemy.team || [{ species: curEnemy.species || 'MAGMULE', level: curEnemy.level || 15 }];
+    // enemy party from the descriptor; difficulty scales team size + levels for
+    // ordinary trainers (story foes — boss / giant — are left untouched).
+    let team = curEnemy.team || [{ species: curEnemy.species || 'MAGMULE', level: curEnemy.level || 15 }];
+    if (!curEnemy.isBoss && !tutorial) {
+      const diff = BData.DIFFICULTY[curTier()] || BData.DIFFICULTY[3];
+      team = team.slice(0, Math.max(1, diff.teamMax))
+                 .map((m) => ({ species: m.species, level: M3.clamp(m.level + diff.levelDelta, 2, BData.MAXLV) }));
+    }
     eParty = team.map((m) => makeEnemy(m.species, m.level, curEnemy.isBoss));
     eActiveIdx = 0;
     eState = eParty[0];
 
-    const ePos = arena === 'dungeon' ? BOSS_POS : M_POS;
     player = actor(modelOf(pState.id), P_POS, YAW_P);
-    enemy = actor(modelOf(eState.id), ePos, YAW_M);
-    if (eState.isBoss) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
+    enemy = actor(modelOf(eState.id), enemyPos(), YAW_M);
+    if (eState.isBoss || eState.isGiant) { enemy.bobAmp = 0.05; enemy.bobRate = 1.0; } // slow looming menace
     rex = actor(curEnemy.trainerModel || 'rex_raised', REX_POS, YAW_M + 0.15);
     items = { heal: BData.ITEMS.heal.uses, cure: BData.ITEMS.cure.uses };
     expFrac = M3.clamp(pState.exp / BData.expToNext(pState.level), 0, 1); expTween = null;
@@ -1667,7 +1840,7 @@ const Battle = (() => {
     awaitParty = false; pickedAlly = -1; awaitOptional = false;
     awaitAsk = false; askChoice = -1; askCursor = 1;
     ball.visible = false; ball.flight = null;
-    Sfx.startMusic(arena === 'dungeon' ? 'boss' : 'battle'); // majestic battle BGM
+    Sfx.startMusic(arena === 'dungeon' ? 'boss' : (arena === 'tutorial' ? 'tutorial' : 'battle'));
 
     if (params.fly) {
       state = 'FLY';
@@ -1679,9 +1852,10 @@ const Battle = (() => {
       state = 'INTRO';
       mode = 'none';
       player.visible = enemy.visible = false;
-      if (arena === 'dungeon')
-        Cam.cut([P_POS[0] - DIR_PM[0] * 1.0, 0.4, P_POS[2] - DIR_PM[2] * 1.0], [BOSS_POS[0], 2.0, BOSS_POS[2]], 56);
-      else {
+      if (arena === 'dungeon' || arena === 'tutorial') {
+        const ep = enemyPos();
+        Cam.cut([P_POS[0] - DIR_PM[0] * 1.0, 0.4, P_POS[2] - DIR_PM[2] * 1.0], [ep[0], 2.0, ep[2]], 56);
+      } else {
         Cam.cut([4.8, 3.1, 6.6], [0, 0.9, 0.2], 44);
         Cam.play([{ t: 2300, pos: defShot.pos, look: defShot.look, fov: defShot.fov, ease: 'inOutCubic' }]);
       }
@@ -1881,8 +2055,9 @@ const Battle = (() => {
       }
     }
 
-    // dungeon atmosphere: drifting ash, periodic void-lightning + rift pulses
-    if (arena === 'dungeon' && state !== 'DONE') {
+    // dungeon / tutorial atmosphere: drifting ash, periodic void-lightning + pulses
+    if ((arena === 'dungeon' || arena === 'tutorial') && state !== 'DONE') {
+      const ep = enemyPos();
       ashT -= dt;
       if (ashT <= 0) {
         ashT = 0.05;
@@ -1895,9 +2070,9 @@ const Battle = (() => {
         const acting = state === 'TURN';
         riftT = (acting ? 0.9 : 2.4) + Math.random() * (acting ? 1.0 : 3);
         Fx.flash(110, acting ? 0.28 : 0.22, [0.6, 0.3, 0.95]);
-        Fx.pulseLight([BOSS_POS[0], BOSS_POS[1] + 1.6, BOSS_POS[2]], [0.66, 0.42, 1], acting ? 1.8 : 1.3, 240, 9);
+        Fx.pulseLight([ep[0], ep[1] + 1.6, ep[2]], [0.66, 0.42, 1], acting ? 1.8 : 1.3, 240, 9);
         Fx.addTrauma(acting ? 0.14 : 0.1);
-        Fx.burst([BOSS_POS[0], BOSS_POS[1] + 1.5, BOSS_POS[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
+        Fx.burst([ep[0], ep[1] + 1.5, ep[2] + 1.5], { n: 8, speed: 2, colors: [[0.7, 0.3, 1], [1, 1, 1]], life: 0.5, g: -1 });
       }
     }
 

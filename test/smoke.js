@@ -10,11 +10,11 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const FILES = ['math3d', 'voxel', 'models', 'font', 'battle_data', 'fx'];
+const FILES = ['math3d', 'voxel', 'models', 'font', 'battle_data', 'save', 'fx'];
 const src = FILES.map((f) => fs.readFileSync(path.join(root, 'js', f + '.js'), 'utf8')).join('\n;\n') +
-  '\n;({ M3, Vox, Models, PFont, BData, Fx })';
+  '\n;({ M3, Vox, Models, PFont, BData, Fx, Save, Cloud })';
 const api = vm.runInThisContext(src, { filename: 'bundle.js' });
-const { M3, Vox, Models, PFont, BData, Fx } = api;
+const { M3, Vox, Models, PFont, BData, Fx, Save, Cloud } = api;
 
 let passed = 0, failed = 0;
 function ok(cond, name) {
@@ -82,8 +82,19 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
     strings.push(BData.fmt(BData.MSG[k], { A: 'MAGMULE', M: 'Psyblast', T: 'Camper REX', B: 'VORNETH-X', E: '135', L: '12' }));
   const collect = (v) => { if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object') Object.values(v).forEach(collect); else if (typeof v === 'string') strings.push(v); };
   collect(BData.DIALOGUE);
+  collect(BData.STORY);
   for (const k in BData.MOVES) strings.push(BData.MOVES[k].name);
   for (const k in BData.SPECIES) strings.push(BData.SPECIES[k].name);
+  for (const k in BData.DIFFICULTY) { strings.push(BData.DIFFICULTY[k].id + ' ' + BData.DIFFICULTY[k].name, BData.DIFFICULTY[k].blurb, BData.DIFFICULTY[k].name + ' set'); }
+  // opening-sequence + menu UI copy (rendered by the new scenes)
+  strings.push('A VOXEL SAGA', 'NEW GAME', 'CONTINUE', 'SELECT A FILE', 'SELECT DIFFICULTY',
+               'EMPTY - New Game', 'SLOT 1', 'SLOT 2', 'SLOT 3', 'ON',
+               'UP/DOWN: Select   E: Confirm   X: Erase', 'E: Begin   X: Back',
+               'NAME YOURSELF', 'RENAME', 'SPACE', 'DEL', 'OK', 'What should they call you?',
+               'Arrows: Move   E: Pick   X: Delete', 'Press any key', 'X: Skip',
+               'OPTIONS', 'Rename', 'Difficulty', 'Save', 'Export', 'Import', 'Close',
+               'Save code ready.', 'Game saved!', 'E: Pick   X: Close', 'E: Set   X: Back',
+               'O: Options   M: Mute', 'E: Talk   C: Party');
   strings.push('Lv.10', 'Lv.15', 'Lv.16', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
                'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'M: Mute   T: Stats', 'E  Talk', 'E  Enter the Rift',
                'MODEL VIEWER  (Left/Right to cycle)', '0123456789',
@@ -176,6 +187,72 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
     if (BData.aiPick(['TACKLE', 'CINDER', 'GROWL'], { atkStage: 0, foeHpFrac: 0.1, pp: { TACKLE: 9, CINDER: 9, GROWL: 9 } }, rr) === 'GROWL') growled = true;
   }
   ok(!growled, 'AI growl gating');
+}
+
+// ----------------------------------------------- type chart + tiered AI
+{
+  ok(BData.typeEff('PSY', 'VOID') === 2 && BData.typeEff('VOID', 'PSY') === 0.5, 'type chart 4-cycle (PSY > VOID)');
+  ok(BData.typeEff('FIRE', 'LEAF') === 2 && BData.typeEff('LEAF', 'FIRE') === 0.5, 'type chart 4-cycle (FIRE > LEAF)');
+  ok(BData.typeEff('NORMAL', 'VOID') === 1 && BData.typeEff('PSY', undefined) === 1, 'NORMAL / untyped are neutral');
+
+  // STAB + effectiveness raise damage; untyped stays the legacy value
+  const hit = (att, def) => BData.damage(att, def, BData.MOVES.PSYBLAST, () => 0.5);
+  const plain = hit({ level: 20, atk: 40, atkStage: 0 }, { def: 30, defStage: 0 }).dmg;
+  const stabSE = hit({ level: 20, atk: 40, atkStage: 0, type: 'PSY' }, { def: 30, defStage: 0, type: 'VOID' }).dmg;
+  ok(stabSE > plain * 2.5 && stabSE < plain * 3.5, 'STAB + super-effective is ~3x (' + plain + ' -> ' + stabSE + ')');
+  const resisted = hit({ level: 20, atk: 40, atkStage: 0, type: 'PSY' }, { def: 30, defStage: 0, type: 'LEAF' }).dmg;
+  ok(resisted < plain, 'PSY into LEAF is resisted (' + resisted + ' < ' + plain + ')');
+
+  // tier 1 (Rookie) picks at random; tier 5 (Master) takes a guaranteed KO
+  const moves = ['TACKLE', 'PSYBLAST'], pp = { TACKLE: 35, PSYBLAST: 20 };
+  const rr = M3.rng(11);
+  let sawWeak = false, sawStrong = false;
+  for (let i = 0; i < 200; i++) {
+    const p = BData.aiPick(moves, { tier: 1, atkStage: 0, foeHpFrac: 1, pp }, rr);
+    if (p === 'TACKLE') sawWeak = true; if (p === 'PSYBLAST') sawStrong = true;
+  }
+  ok(sawWeak && sawStrong, 'tier 1 picks moves at random (sees both)');
+
+  const ctx5 = { tier: 5, atkStage: 0, foeHpFrac: 0.1, pp,
+                 self: { level: 30, atk: 60, atkStage: 0, type: 'PSY' },
+                 foe: { def: 30, defStage: 0, type: 'VOID', hp: 6, maxHp: 60 } };
+  let allKO = true;
+  for (let i = 0; i < 50; i++) if (BData.aiPick(moves, ctx5, M3.rng(i + 1)) !== 'PSYBLAST') allKO = false;
+  ok(allKO, 'tier 5 takes the guaranteed KO move every time');
+
+  const mv3 = ['TACKLE', 'GROWL'], pp3 = { TACKLE: 35, GROWL: 30 };
+  let growlLow = false;
+  const r3 = M3.rng(5);
+  for (let i = 0; i < 300; i++)
+    if (BData.aiPick(mv3, { tier: 3, atkStage: 0, foeHpFrac: 0.2, pp: pp3 }, r3) === 'GROWL') growlLow = true;
+  ok(!growlLow, 'tier 3 stops setting up once the foe is low');
+
+  ok(BData.enemyMovepool(['TACKLE', 'GROWL', 'CINDER', 'SCORCH'], 2).length === 2, 'enemyMovepool trims to N moves');
+  ok(BData.enemyMovepool(['GROWL', 'TACKLE'], 2)[0] === 'TACKLE', 'enemyMovepool lists damaging moves first');
+
+  ok(BData.aiShouldSwitch({ type: 'VOID', hpFrac: 0.9 }, { type: 'PSY' }, [{ idx: 1, type: 'FIRE', alive: true }], 4, () => 0) === 1,
+     'tier 4 pivots a bad matchup to a better bench mon');
+  ok(BData.aiShouldSwitch({ type: 'VOID', hpFrac: 0.9 }, { type: 'PSY' }, [{ idx: 1, type: 'FIRE', alive: true }], 2, () => 0) === -1,
+     'tiers below 4 never voluntarily switch');
+
+  for (let d = 1; d <= 5; d++) ok(BData.DIFFICULTY[d] && BData.DIFFICULTY[d].name, 'difficulty ' + d + ' defined');
+}
+
+// ------------------------------------------------------ save / save codes
+{
+  const s = { name: 'AERIN', difficulty: 4,
+    party: [{ species: 'PIXLIT', level: 12, hp: null, exp: 5 }, { species: 'EMBERIK', level: 9, hp: 20, exp: 0 }],
+    npcs: { rex: true }, bossBeaten: true, bossCaptured: false, battles: 3 };
+  const code = Save.exportCode(s);
+  const back = Save.importCode(code);
+  ok(back && back.name === 'AERIN' && back.difficulty === 4 && back.party.length === 2 &&
+     back.party[0].hp === null && back.party[1].hp === 20 && back.npcs.rex === true && back.bossBeaten === true,
+     'save code round-trips every field');
+  ok(Save.importCode('GC1.bad.zzzz') === null && Save.importCode('garbage') === null &&
+     Save.importCode(code.slice(0, -4) + 'AAAA') === null, 'corrupt / tampered save codes reject');
+  ok(Cloud.available() === false, 'cloud sync is OFF by default (no endpoint configured)');
+  const p = Cloud.push('x', s);
+  ok(p && typeof p.then === 'function', 'Cloud.push is a safe no-op promise without fetch');
 }
 
 // --------------------------------------------------- Monte-Carlo balance

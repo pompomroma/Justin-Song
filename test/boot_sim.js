@@ -12,7 +12,8 @@ const vm = require('vm');
 
 const root = path.join(__dirname, '..');
 const ORDER = ['math3d', 'input', 'audio', 'font', 'voxel', 'models', 'gfx',
-               'ui', 'fx', 'camera', 'battle_data', 'battle', 'overworld', 'main'];
+               'ui', 'fx', 'camera', 'battle_data', 'save', 'battle', 'overworld',
+               'intro', 'story', 'titlemenu', 'nameentry', 'main'];
 
 let failures = 0;
 function ok(cond, name) {
@@ -177,7 +178,7 @@ function attackCycle(sb) {
 
 // ------------------------------------- run 2: overworld walk + handoff
 {
-  const sb = makeSandbox('');
+  const sb = makeSandbox('#overworld');
   sb.__pump(5);
   sb.__dispatch('keydown', { code: 'KeyW', repeat: false });
   sb.__pump(240); // walk forward, hit collision/boundary paths
@@ -340,7 +341,7 @@ function attackCycle(sb) {
 
 // ----------------------------------- run 9: mobile / touch controls
 {
-  const sb = makeSandbox('');
+  const sb = makeSandbox('#overworld');
   sb.__pump(5);
   ok(vm.runInContext('Input.usingTouch()', sb) === false, 'mobile controls hidden before any touch');
   // D-pad down (overworld layout)
@@ -368,7 +369,7 @@ function attackCycle(sb) {
 
 // ------------------------------ run 10: battle insets the 3D inner screen
 {
-  const sb = makeSandbox(''); // overworld
+  const sb = makeSandbox('#overworld'); // overworld
   sb.__pump(5);
   const w0 = vm.runInContext('document.getElementById("gl").style.width', sb);
   ok(w0 !== '82%', 'overworld 3D view is not inset (' + w0 + ')');
@@ -381,7 +382,7 @@ function attackCycle(sb) {
 
 // ---------------- run 11: multi-monster NPC battle + switch prompt + EXP
 {
-  const sb = makeSandbox('');
+  const sb = makeSandbox('#overworld');
   vm.runInContext(`(${function () {
     const realDmg = BData.damage;            // player crushes; the foes only chip
     BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 50 : 2; return r; };
@@ -423,6 +424,79 @@ function attackCycle(sb) {
   sb.__pump(150);
   ok(sb.__errors.length === 0, 'no errors using a beam-type attack (kindBeam tgt fix)' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// press a key and let one frame consume the edge (so N nav presses register
+// as N distinct moves, not one)
+const tap = (sb, code) => { press(sb, code); sb.__pump(2); };
+
+// ----------------------------------- run 13: default boot opens the Intro
+{
+  const sb = makeSandbox('');     // no hash -> the opening cinematic
+  sb.__pump(60);
+  ok(vm.runInContext('__Game.sceneName', sb) === 'intro', 'default boot opens the Intro cinematic');
+  press(sb, 'Space');             // any key advances to the title menu
+  sb.__pump(140);                 // ride the fade
+  ok(vm.runInContext('__Game.sceneName', sb) === 'title', 'Intro -> TitleMenu on a key press');
+  ok(sb.__errors.length === 0, 'no errors through the intro' + (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ----------------------------------- run 14: full opening chain to the grove
+{
+  const sb = makeSandbox('#title');
+  vm.runInContext(`(${function () {
+    // the PSY protector crushes the VOID giant (a few hits -> enrage -> win);
+    // the giant only chips, so the tutorial is a guaranteed win -> faint.
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.type === 'PSY' ? 25 : 1; return r; };
+  }.toString()})()`, sb);
+  sb.__pump(20);
+  ok(vm.runInContext('__Game.sceneName', sb) === 'title', 'TitleMenu boots from #title');
+  let iter = 0, reached = false;
+  while (iter < 400 && !reached) {
+    const sc = vm.runInContext('__Game.sceneName', sb);
+    if (sc === 'title') {                 // empty slot -> difficulty -> new game
+      press(sb, 'Space'); sb.__pump(8);
+      if (vm.runInContext('__Game.sceneName', sb) === 'title') { press(sb, 'Space'); sb.__pump(40); }
+    } else if (sc === 'name') {            // walk to OK (row 3, col 8) and confirm
+      tap(sb, 'ArrowDown'); tap(sb, 'ArrowDown'); tap(sb, 'ArrowDown');
+      for (let i = 0; i < 8; i++) tap(sb, 'ArrowRight');
+      press(sb, 'Space'); sb.__pump(40);
+    } else if (sc === 'battle') {          // Attack -> Psyblast (bottom-left move)
+      sb.__pump(22);
+      press(sb, 'ArrowDown'); sb.__pump(3); press(sb, 'ArrowRight'); sb.__pump(3); press(sb, 'Space'); sb.__pump(6);
+      press(sb, 'ArrowDown'); sb.__pump(3); press(sb, 'ArrowLeft'); sb.__pump(3); press(sb, 'Space'); sb.__pump(6);
+      press(sb, 'Space'); sb.__pump(4);
+    } else {                               // story / cutscene fades
+      press(sb, 'Space'); sb.__pump(20);
+    }
+    iter++;
+    if (vm.runInContext('__Game.sceneName', sb) === 'overworld') reached = true;
+  }
+  ok(reached, 'opening chain reaches the grove (Title->NewGame->wake->tutorial->faint->name->overworld, ' + iter + ' iters)');
+  ok(vm.runInContext('typeof __Game.save.name === "string" && __Game.save.name.length > 0', sb), 'the player named themselves');
+  sb.__pump(160);
+  ok(sb.__errors.length === 0, 'no errors through the entire opening sequence' + (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ------------------------------- run 15: difficulty 5 (switch/AI) battle
+{
+  const sb = makeSandbox('#overworld');
+  vm.runInContext(`(${function () {
+    Game.save.difficulty = 5;            // Master: weakness-targeting + switching
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 50 : 2; return r; };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__battleEnd = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  vm.runInContext('__Game.toBattle({ arena:"grove", npcId:"ace", enemy:{ team:[{species:"MAGMULE",level:14},{species:"EMBERIK",level:14},{species:"PIXLIT",level:15}], trainer:"Ace KORU", npcId:"ace", trainerModel:"npc_ace" } })', sb);
+  let frames = 0;
+  while (frames < 60000 && !vm.runInContext('globalThis.__battleEnd', sb)) { attackCycle(sb); frames += 40; }
+  ok(vm.runInContext('globalThis.__battleEnd', sb) === 'win', 'Master (tier 5) multi-mon battle completes a win (' + frames + ' frames)');
+  ok(vm.runInContext('__Game.save.difficulty === 5', sb), 'difficulty persisted on the save');
+  sb.__pump(200);
+  ok(sb.__errors.length === 0, 'no errors at difficulty 5 with enemy AI / switching' + (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');

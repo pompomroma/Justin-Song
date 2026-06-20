@@ -20,6 +20,7 @@ const Input = (() => {
     KeyX: 'back', Escape: 'back', Backspace: 'back',
     KeyM: 'mute',
     KeyC: 'party',
+    KeyO: 'options',
     KeyT: 'stats',
     KeyP: 'pose',
     ShiftLeft: 'fast', ShiftRight: 'fast',

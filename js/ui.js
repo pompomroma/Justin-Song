@@ -337,10 +337,11 @@ const UI = (() => {
   // ---- message box / typewriter ----
 
   function typewriter() {
-    let lines = [], shown = 0, total = 0, time = 0, blip = 0;
+    let lines = [], shown = 0, total = 0, time = 0, blip = 0, voiced = false, joined = '';
     return {
-      set(text, maxWidth) {
+      set(text, maxWidth, opts) {
         maxWidth = maxWidth || 860;
+        voiced = !!(opts && opts.voiced);
         lines = [];
         for (const para0 of String(text).split('\n')) {
           let line = '';
@@ -351,7 +352,8 @@ const UI = (() => {
           }
           lines.push(line);
         }
-        total = lines.join('\n').length;
+        joined = lines.join('\n');
+        total = joined.length;
         shown = 0; time = 0;
       },
       update(dt) {
@@ -359,7 +361,9 @@ const UI = (() => {
         time += dt * 1000;
         while (time >= 18 && shown < total) {
           time -= 18; shown++;
-          if ((++blip % 3) === 0 && typeof Sfx !== 'undefined') Sfx.play('blip');
+          if (typeof Sfx === 'undefined') continue;
+          if (voiced) { if (shown % 2 === 0) Sfx.voice(joined[shown - 1]); }   // spoken line
+          else if ((++blip % 3) === 0) Sfx.play('blip');
         }
       },
       skip() { shown = total; },
@@ -396,6 +400,17 @@ const UI = (() => {
     }
   }
 
+  // big centered cutscene caption (sits in the cinematic safe band, clear of
+  // the letterbox bars) — used for spoken story lines.
+  function cutsceneText(ctx, tw, t, waiting) {
+    const lines = tw.visibleLines();
+    const y0 = 252 - (Math.max(1, lines.length) - 1) * 17;
+    for (let i = 0; i < lines.length; i++)
+      PFont.drawC(ctx, lines[i], 480, y0 + i * 34, { scale: 3, color: '#ffffff', outline: '#0a0a14' });
+    if (waiting && tw.done() && Math.sin(t * 7) > 0)
+      PFont.drawC(ctx, '▼', 480, y0 + lines.length * 34 + 6, { scale: 2, color: '#f8c838' });
+  }
+
   function prompt(ctx, text) {
     const w = PFont.width(text, 2) + 36;
     const x = 480 - w / 2;
@@ -426,6 +441,6 @@ const UI = (() => {
     para, panel, bar, ball, tealBall, hpColor,
     redFrame, emblem, moveGrid, actionGrid, partyPanel, partyHint,
     enemyPanel, playerPanel, playerParty,
-    typewriter, msgBox, prompt, hint, locationCard,
+    typewriter, msgBox, cutsceneText, prompt, hint, locationCard,
   };
 })();
