@@ -6,10 +6,12 @@ A Pokemon-style, turn-based battle RPG prototype rendered entirely in
 files. Everything (models, font, UI, sound) is generated procedurally
 in vanilla JavaScript, so it runs on a completely empty Replit project.
 
-Roam a large forest, challenge several scattered trainers — **Camper
-REX**, **Hiker DALE**, **Lass IVY** and **Ace KORU** — with your party
-of **PIXLIT**, **THORNLET** and **EMBERIK**, then step through the dark
-**rift portal** at the far edge into an intimidating dungeon to face
+Roam an **endless, procedurally generated forest** — a Minecraft-style
+world that streams in **16-unit chunks** around you, deterministically
+spawning trees, rocks, grass and **wandering trainers** at a controlled
+density (tougher the farther you wander). Challenge them with your party
+of **PIXLIT**, **THORNLET** and **EMBERIK**, then return to the origin and
+step through the dark **rift portal** into an intimidating dungeon to face
 the boss, **VORNETH**. Expect dynamic camera swings, screen shake,
 hitstop, bullet-time, voxel particle storms and a classic text-driven
 turn system (PP, stat stages, crits, misses).
@@ -145,9 +147,9 @@ screen and hide the instant you press a key. In the overworld you get an
 (right edge). In battle, just tap the move buttons, party balls, menu options
 and tap to advance text; **A**/**B** are there too.
 
-Lose and you black out (party fully healed); win, run, or capture and
-REX will want a rematch. PIXLIT starts its first fight at 17/28 HP —
-lean on your bench.
+Lose and you black out (party fully healed); win, run, or capture and the
+trainer stays beaten where you left them. A gentle **starter trainer** waits
+beside the campfire at spawn; wander outward for steadily tougher teams.
 
 ## Resolution & framerate
 
@@ -206,10 +208,11 @@ opening cinematic (try a few reloads for the 3 variants; **X** skips) →
 title menu (New Game on an empty slot, pick a difficulty) → wake cutscene →
 tutorial battle vs the GIANT (drop it below half HP for the enrage + its
 telegraphed Giga Beam) → faint → name yourself → grove → **O** Options
-(rename / difficulty / save / export+import a save code) → battle each
-trainer (REX / DALE / IVY / KORU) at different difficulties → each action
-(Attack, Items, Capture, Run, party switch with **C**) → the rift portal →
-boss intro atop the cliff with the upward camera → knock VORNETH below half
+(rename / difficulty / save / export+import a save code) → **wander far** in
+any direction (the world keeps generating; trainers get tougher) and battle
+the procedurally spawned trainers at different difficulties → each action
+(Attack, Items, Capture, Run, party switch with **C**) → return to the origin
+portal → boss intro atop the cliff with the upward camera → knock VORNETH below half
 HP for its transformation climax → defeat or capture it → field the captured
 VORNETH and use its Awaken move → loss path (black out) → reload and
 **Continue** the saved slot → mute (**M**) and stats (**T**) toggles.

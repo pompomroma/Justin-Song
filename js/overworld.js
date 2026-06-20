@@ -1,9 +1,11 @@
 /* Grove Clash — js/overworld.js
-   Overworld: a large walkable forest at dusk. WASD movement with a smooth
-   third-person follow camera and circle collision. Several trainer NPCs
-   are scattered around (each a focused 1v1 battle); a dark rift portal at
-   the far edge leads to the dungeon boss. Campfire embers, fireflies and
-   a swirling portal give the world atmosphere. */
+   Overworld: an INFINITE, Minecraft-style procedurally generated forest. The
+   world streams in 16-unit chunks around the player: each chunk deterministically
+   spawns trees, rocks, bushes and grass (seamless ground via a global cell hash)
+   and, at a controlled density, a wandering trainer NPC. Chunks build on a small
+   per-frame budget and are disposed when they fall out of range. Difficulty
+   scales with distance from spawn. The origin holds a campfire, the rift portal
+   to the dungeon boss, and a guaranteed starter trainer. */
 const Overworld = (() => {
 
   const ENV = {
@@ -17,23 +19,23 @@ const Overworld = (() => {
   const SPAWN = [-6, 0, -6];
   const FIRE_POS = [8.6, 0, 4.2];
   const PORTAL_POS = [0, 0, 15.4];
-  const BOUND = 16.5;
 
-  // trainer NPCs — one monster each. dlg keys live in BData.DIALOGUE.
-  // each trainer now fields a small, varied team (sent in one at a time)
-  const NPCS = [
-    { id: 'rex',   name: 'Camper REX', pos: [7, 0, 3.2],   model: 'rex_idle',  battleModel: 'rex_raised',
-      team: [{ species: 'MAGMULE', level: 13 }, { species: 'EMBERIK', level: 14 }] },
-    { id: 'hiker', name: 'Hiker DALE', pos: [-11, 0, 6],   model: 'npc_hiker', battleModel: 'npc_hiker',
-      team: [{ species: 'THORNLET', level: 12 }, { species: 'MAGMULE', level: 11 }, { species: 'THORNLET', level: 13 }] },
-    { id: 'lass',  name: 'Lass IVY',   pos: [12, 0, -8],   model: 'npc_lass',  battleModel: 'npc_lass',
-      team: [{ species: 'EMBERIK', level: 12 }, { species: 'PIXLIT', level: 13 }, { species: 'THORNLET', level: 12 }] },
-    { id: 'ace',   name: 'Ace KORU',   pos: [-8.5, 0, -12], model: 'npc_ace',  battleModel: 'npc_ace',
-      team: [{ species: 'MAGMULE', level: 15 }, { species: 'EMBERIK', level: 15 }, { species: 'PIXLIT', level: 16 }] },
-  ];
+  // ---- infinite chunk streaming ----
+  const CHUNK = 16;          // world units per chunk side
+  const VIEW_R = 2;          // load radius in chunks (fog hides the boundary)
+  const KEEP_R = VIEW_R + 1; // unload hysteresis
+  const WORLD_SEED = 0x9e37;
+  const chunks = new Map();  // "cx,cz" -> { cx, cz, k, gen, handle }
+  let buildQueue = [];
 
-  let staticH = null;
-  const colliders = [];
+  // procedural trainer flavor (generic; the named-quest trainers are retired)
+  const TITLES = ['Ranger', 'Wanderer', 'Nomad', 'Scout', 'Hunter', 'Warden', 'Drifter', 'Pilgrim'];
+  const NAMES = ['KAI', 'VEX', 'MARA', 'TOLI', 'BREN', 'SUNE', 'RILEY', 'ODA', 'NIX', 'PERA'];
+  const WILD = ['MAGMULE', 'EMBERIK', 'THORNLET', 'PIXLIT'];
+  const NPC_MODELS = [['rex_idle', 'rex_raised'], ['npc_hiker', 'npc_hiker'], ['npc_lass', 'npc_lass'], ['npc_ace', 'npc_ace']];
+  const INTRO = ['You there - let us test your bond!', 'The wilds favor the bold. Battle me!',
+                 'No path forward without a fight!', 'You have the look of a challenger!'];
+  const BEATEN = ['Good battle. Safe travels.', 'You are tougher than this terrain.', 'Go on - the wilds are calling.'];
 
   let hero = null;
   let camYaw = 0;
@@ -49,6 +51,15 @@ const Overworld = (() => {
   const OPTIONS = ['Rename', 'Difficulty', 'Save', 'Export', 'Import', 'Close'];
   function toast(msg) { notice = msg; noticeT = 2.6; }
 
+  // ---- deterministic hashing / per-chunk RNG ----
+  const ckey = (cx, cz) => cx + ',' + cz;
+  function hash2(x, y) {
+    let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + WORLD_SEED) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+  const chunkRng = (cx, cz, salt) => M3.rng((hash2(cx, cz) ^ Math.imul(salt | 0, 2654435761)) >>> 0);
+
   // read-only party rows for the overworld party check
   function savePartyRows() {
     return Game.save.party.map((m) => {
@@ -59,80 +70,149 @@ const Overworld = (() => {
     });
   }
 
-  function buildStatic() {
-    if (staticH) return;
-    colliders.length = 0;
-    const parts = [];
-    const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
-    const ground = Models.groundMesh({
-      radius: 22,
-      patches: [
-        { x: FIRE_POS[0], z: FIRE_POS[2], rx: 2.4, rz: 1.9, rot: 0.2 },
-        { x: SPAWN[0], z: SPAWN[2], rx: 1.4, rz: 1.1, rot: 0.9 },
-        { x: PORTAL_POS[0], z: PORTAL_POS[2], rx: 3.2, rz: 2.6, rot: 0 },
-      ],
-    });
-    const r = M3.rng(7);
-    for (let i = 0; i < 20; i++) {
-      const a = (i / 20) * Math.PI * 2 + r() * 0.25;
-      push('tree' + (i % 3), [Math.cos(a) * 15, 0, Math.sin(a) * 15], r() * 6.3, 0.95 + r() * 0.45);
-    }
-    for (let i = 0; i < 26; i++) {
-      const a = (i / 26) * Math.PI * 2 + 0.13 + r() * 0.2;
-      push('tree' + ((i + 2) % 3), [Math.cos(a) * 19, 0, Math.sin(a) * 19], r() * 6.3, 1.1 + r() * 0.55);
-    }
-    // a few inner trees for depth (kept clear of NPCs / paths)
-    const innerTrees = [[4, 0, -6], [-4, 0, 8], [10, 0, 9], [-13, 0, -3], [3, 0, 11]];
-    for (const p of innerTrees) push('tree' + (Math.floor(r() * 3)), p, r() * 6.3, 0.9 + r() * 0.4);
+  // ---- chunk generation ----
+  // seamless blocky ground tile: per-0.5u quad color from a GLOBAL cell hash,
+  // so adjacent chunks tile without seams. Coarse hashed blotches = dirt.
+  function chunkGround(cx, cz) {
+    const step = 0.5, n = CHUNK / step, ox = cx * CHUNK, oz = cz * CHUNK;
+    const grassA = M3.hex('#3f6d3a'), grassB = M3.hex('#487c41'), grassC = M3.hex('#36602f');
+    const dirtA = M3.hex('#6b5238'), dirtB = M3.hex('#7a5f40');
+    const data = new Float32Array(n * n * 6 * 9);
+    let o = 0;
+    for (let gz = 0; gz < n; gz++)
+      for (let gx = 0; gx < n; gx++) {
+        const wx = ox + gx * step, wz = oz + gz * step;
+        const cellX = Math.round(wx / step), cellZ = Math.round(wz / step);
+        const h = hash2(cellX + 50000, cellZ + 50000) / 4294967296;
+        const dirt = (hash2(Math.floor(wx / 3) + 9000, Math.floor(wz / 3) + 9000) / 4294967296) < 0.10;
+        const col = dirt ? (h < 0.5 ? dirtA : dirtB) : (h < 0.18 ? grassC : (h < 0.62 ? grassA : grassB));
+        const jit = 0.94 + (h % 0.13);
+        const r = col[0] * jit, g = col[1] * jit, b = col[2] * jit;
+        const x1 = wx + step, z1 = wz + step;
+        const corners = [[wx, wz], [x1, wz], [x1, z1], [wx, wz], [x1, z1], [wx, z1]];
+        for (const [x, z] of corners) {
+          data[o++] = x; data[o++] = 0; data[o++] = z;
+          data[o++] = 0; data[o++] = 1; data[o++] = 0;
+          data[o++] = r; data[o++] = g; data[o++] = b;
+        }
+      }
+    return { data, count: n * n * 6 };
+  }
 
-    const props = [
-      ['rock0', [9.5, 0, 0.4], 0.4, 1.2], ['rock1', [6.5, 0, 6.2], 1.9, 0.95],
-      ['rock1', [-9.5, 0, 3.5], 0.9, 1.3], ['rock0', [-2, 0, 9.5], 3.4, 1.0],
-      ['rock0', [13, 0, -3], 2.1, 1.1], ['rock1', [-12, 0, -8], 5.0, 1.2],
-      ['bush', [-5, 0, 5], 0.6, 1.1], ['bush', [4, 0, -9], 2.8, 1.0],
-      ['bush', [-9, 0, -2], 4.4, 1.1], ['bush', [2, 0, 9], 1.2, 0.95],
-      ['bush', [11, 0, -2], 5.3, 1.0], ['bush', [-3, 0, -8], 0.9, 1.05],
-      ['campfire', FIRE_POS, 0.3, 1.15],
-    ];
-    for (const [n, p, y, s] of props) {
-      push(n, p, y, s);
-      if (n.indexOf('rock') === 0) colliders.push({ x: p[0], z: p[2], r: 0.9 * s });
-      else if (n === 'bush') colliders.push({ x: p[0], z: p[2], r: 0.7 * s });
-      else if (n === 'campfire') colliders.push({ x: p[0], z: p[2], r: 0.8 });
-    }
-    // the rift portal at the far edge
-    push('portal', PORTAL_POS, Math.PI, 1.35);
-    colliders.push({ x: PORTAL_POS[0], z: PORTAL_POS[2], r: 1.1 });
-    // NPC colliders
-    for (const n of NPCS) colliders.push({ x: n.pos[0], z: n.pos[2], r: 0.55 });
+  function makeNpc(cx, cz, nx, nz, baseLv, count, rng) {
+    const mi = Math.floor(rng() * NPC_MODELS.length);
+    const team = [];
+    for (let i = 0; i < count; i++)
+      team.push({ species: WILD[Math.floor(rng() * WILD.length)],
+                  level: M3.clamp(baseLv + (i ? Math.floor(rng() * 3) - 1 : 0), 5, 55) });
+    const name = TITLES[Math.floor(rng() * TITLES.length)] + ' ' + NAMES[Math.floor(rng() * NAMES.length)];
+    return { key: ckey(cx, cz), name, model: NPC_MODELS[mi][0], battleModel: NPC_MODELS[mi][1],
+             team, pos: [nx, 0, nz], yaw: Math.atan2(-nx, -nz), intro: INTRO[Math.floor(rng() * INTRO.length)],
+             beaten: BEATEN[Math.floor(rng() * BEATEN.length)], h: null };
+  }
 
-    for (let i = 0; i < 90; i++) {
-      const a = r() * Math.PI * 2, rad = 2 + r() * 12;
-      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
-      if (Math.hypot(x - FIRE_POS[0], z - FIRE_POS[2]) < 1.6) continue;
-      push('tuft', [x, 0, z], r() * 6.3, 0.8 + r() * 0.9);
+  function genChunk(cx, cz) {
+    const ox = cx * CHUNK, oz = cz * CHUNK;
+    const inHere = (p) => (p[0] >= ox && p[0] < ox + CHUNK && p[2] >= oz && p[2] < oz + CHUNK);
+    const hasFire = inHere(FIRE_POS), hasPortal = inHere(PORTAL_POS), hasSpawn = inHere(SPAWN);
+    const ring = Math.hypot(cx, cz);
+    const parts = [], cols = [];
+    const reserved = (px, pz, rad) =>
+      Math.hypot(px - SPAWN[0], pz - SPAWN[2]) < rad ||
+      Math.hypot(px - FIRE_POS[0], pz - FIRE_POS[2]) < rad ||
+      Math.hypot(px - PORTAL_POS[0], pz - PORTAL_POS[2]) < rad;
+
+    // NPC first (so trees can keep clear of it). One per chunk at most.
+    let npc = null;
+    const nr = chunkRng(cx, cz, 7);
+    if (hasSpawn) {
+      npc = makeNpc(cx, cz, SPAWN[0] + 5, SPAWN[2] + 3.4, 10, 1, nr); // gentle starter
+    } else if (nr() < 0.12) {                                        // Minecraft-like density
+      const nx = ox + 4 + nr() * (CHUNK - 8), nz = oz + 4 + nr() * (CHUNK - 8);
+      if (!reserved(nx, nz, 5)) {
+        const baseLv = M3.clamp(11 + Math.floor(ring * 1.4), 8, 45);
+        const count = 1 + (ring > 2 ? 1 : 0) + (ring > 5 ? 1 : 0);
+        npc = makeNpc(cx, cz, nx, nz, baseLv, count, nr);
+      }
     }
+    if (npc) cols.push({ x: npc.pos[0], z: npc.pos[2], r: 0.55 });
+
+    // scenery on a jittered grid
+    const r = chunkRng(cx, cz, 1);
+    const CELL = 4;
+    for (let lz = 0; lz < CHUNK; lz += CELL)
+      for (let lx = 0; lx < CHUNK; lx += CELL) {
+        const px = ox + lx + r() * CELL, pz = oz + lz + r() * CELL;
+        if (reserved(px, pz, 4)) { r(); r(); continue; }
+        if (npc && Math.hypot(px - npc.pos[0], pz - npc.pos[2]) < 2.2) { r(); r(); continue; }
+        const u = r(), s = 0.85 + r() * 0.6;
+        if (u < 0.40) { parts.push(['tree' + (Math.floor(r() * 3)), [px, 0, pz], r() * 6.3, s + 0.1]); cols.push({ x: px, z: pz, r: 0.55 * s }); }
+        else if (u < 0.50) { parts.push(['rock' + (r() < 0.5 ? 0 : 1), [px, 0, pz], r() * 6.3, s]); cols.push({ x: px, z: pz, r: 0.85 * s }); }
+        else if (u < 0.62) { parts.push(['bush', [px, 0, pz], r() * 6.3, s]); cols.push({ x: px, z: pz, r: 0.65 * s }); }
+        else if (u < 0.95) { parts.push(['tuft', [px, 0, pz], r() * 6.3, 0.8 + r() * 0.9]); }
+      }
+
+    if (hasFire) { parts.push(['campfire', FIRE_POS, 0.3, 1.15]); cols.push({ x: FIRE_POS[0], z: FIRE_POS[2], r: 0.8 }); }
+    if (hasPortal) { parts.push(['portal', PORTAL_POS, Math.PI, 1.35]); cols.push({ x: PORTAL_POS[0], z: PORTAL_POS[2], r: 1.1 }); }
+    return { parts, cols, npc };
+  }
+
+  function buildChunk(c) {
+    const ground = chunkGround(c.cx, c.cz);
+    const ms = c.gen.parts.map(([n, pos, yaw, s]) => ({ m: Models.get(n), pos, yaw, s }));
     let total = ground.count;
-    for (const p of parts) total += p.m.count;
+    for (const p of ms) total += p.m.count;
     const data = new Float32Array(total * 9);
     data.set(ground.data, 0);
     let off = ground.count * 9;
-    for (const p of parts)
-      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
-    staticH = Gfx.upload({ data, count: total });
+    for (const p of ms) off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    c.handle = Gfx.upload({ data, count: total });
+  }
+
+  function ensureChunk(cx, cz) {
+    const k = ckey(cx, cz);
+    if (chunks.has(k)) return;
+    const gen = genChunk(cx, cz);
+    if (gen.npc) gen.npc.h = Game.handle(gen.npc.model);
+    const c = { cx, cz, k, gen, handle: null };
+    chunks.set(k, c);
+    buildQueue.push(c);
+  }
+
+  function unloadChunk(k) {
+    const c = chunks.get(k);
+    if (!c) return;
+    if (c.handle && Gfx.dispose) Gfx.dispose(c.handle);
+    chunks.delete(k);
+  }
+
+  // load the view neighborhood, unload far chunks; build on a small budget
+  function streamChunks(budget) {
+    const pcx = Math.floor(hero.pos[0] / CHUNK), pcz = Math.floor(hero.pos[2] / CHUNK);
+    for (let dz = -VIEW_R; dz <= VIEW_R; dz++)
+      for (let dx = -VIEW_R; dx <= VIEW_R; dx++) ensureChunk(pcx + dx, pcz + dz);
+    for (const k of Array.from(chunks.keys())) {
+      const c = chunks.get(k);
+      if (Math.abs(c.cx - pcx) > KEEP_R || Math.abs(c.cz - pcz) > KEEP_R) unloadChunk(k);
+    }
+    buildQueue = buildQueue.filter((c) => chunks.has(c.k) && !c.handle);
+    let n = budget === undefined ? 2 : budget;          // chunks built per frame
+    while ((n-- > 0 || budget < 0) && buildQueue.length) {
+      const c = buildQueue.shift();
+      if (chunks.has(c.k) && !c.handle) buildChunk(c);
+    }
   }
 
   function enter(params) {
     params = params || {};
-    buildStatic();
     Fx.clear();
     const m = Models.get('hero');
     if (!hero) hero = { pos: SPAWN.slice(), yaw: 0, h: Game.handle('hero'), height: m.height };
-    // NPC actors face the centre of the clearing
-    for (const n of NPCS) { n.h = Game.handle(n.model); n.yaw = Math.atan2(-n.pos[0], -n.pos[2]); }
     if (params.result === 'loss') { M3.set(hero.pos, SPAWN[0], 0, SPAWN[2]); }
     else if (params.fromDungeon) { M3.set(hero.pos, PORTAL_POS[0], 0, PORTAL_POS[2] - 3.2); }
+    else if (params.result === 'intro') { M3.set(hero.pos, SPAWN[0], 0, SPAWN[2]); }
     else if (params.result) { M3.set(hero.pos, 1.5, 0, 0.5); }
+    streamChunks(-1);            // build the starting neighborhood immediately
     hero.yaw = Math.atan2(-hero.pos[0], -hero.pos[2]);
     camYaw = hero.yaw;
     Cam.cut([hero.pos[0] - Math.sin(camYaw) * 4.4, 2.3, hero.pos[2] - Math.cos(camYaw) * 4.4],
@@ -155,13 +235,13 @@ const Overworld = (() => {
     }
   }
 
+  // iterate loaded-chunk NPCs
+  function eachNpc(fn) { for (const c of chunks.values()) if (c.gen.npc) fn(c.gen.npc); }
+
   // nearest interactable (npc or portal) within reach, or null
   function nearest() {
     let best = null, bestD = 2.2;
-    for (const n of NPCS) {
-      const d = M3.dist(hero.pos, n.pos);
-      if (d < bestD) { bestD = d; best = { kind: 'npc', npc: n }; }
-    }
+    eachNpc((n) => { const d = M3.dist(hero.pos, n.pos); if (d < bestD) { bestD = d; best = { kind: 'npc', npc: n }; } });
     const pd = M3.dist(hero.pos, PORTAL_POS);
     if (pd < 2.8 && pd < bestD + 0.6) best = { kind: 'portal' };
     return best;
@@ -182,13 +262,12 @@ const Overworld = (() => {
     const n = target.npc;
     n.yaw = Math.atan2(hero.pos[0] - n.pos[0], hero.pos[2] - n.pos[2]);
     hero.yaw = Math.atan2(n.pos[0] - hero.pos[0], n.pos[2] - hero.pos[2]);
-    const dlg = BData.DIALOGUE[n.id] || {};
-    if (Game.save.npcs[n.id]) {
-      startDialogue(dlg.beaten || ['...'], null); // already beaten: just chat
+    if (Game.save.npcs[n.key]) {
+      startDialogue([n.name + ': ' + n.beaten], null);      // already beaten: just chat
     } else {
-      startDialogue(dlg.intro || ['Let us battle!'], () =>
-        Game.toBattle({ arena: 'grove', npcId: n.id,
-          enemy: { team: n.team.map((m) => ({ species: m.species, level: m.level })), trainer: n.name, npcId: n.id, trainerModel: n.battleModel } }));
+      startDialogue([n.name + ' wants to battle!', n.name + ': ' + n.intro], () =>
+        Game.toBattle({ arena: 'grove', npcId: n.key,
+          enemy: { team: n.team.map((m) => ({ species: m.species, level: m.level })), trainer: n.name, npcId: n.key, trainerModel: n.battleModel } }));
     }
   }
 
@@ -332,12 +411,13 @@ const Overworld = (() => {
         stepT -= dt;
         if (stepT <= 0) { Sfx.play('step'); stepT = 0.3; }
       }
-      const d0 = Math.hypot(hero.pos[0], hero.pos[2]);
-      if (d0 > BOUND) { hero.pos[0] *= BOUND / d0; hero.pos[2] *= BOUND / d0; }
-      for (const c of colliders) {
-        const dx = hero.pos[0] - c.x, dz = hero.pos[2] - c.z;
-        const d = Math.hypot(dx, dz), min = c.r + 0.32;
-        if (d < min && d > 0.0001) { hero.pos[0] = c.x + dx / d * min; hero.pos[2] = c.z + dz / d * min; }
+      // circle collision against nearby loaded-chunk colliders (no world bound)
+      for (const c of chunks.values()) {
+        for (const o of c.gen.cols) {
+          const dx = hero.pos[0] - o.x, dz = hero.pos[2] - o.z;
+          const d = Math.hypot(dx, dz), min = o.r + 0.32;
+          if (d < min && d > 0.0001) { hero.pos[0] = o.x + dx / d * min; hero.pos[2] = o.z + dz / d * min; }
+        }
       }
       const near = nearest();
       if (Input.pressed('party')) { partyView = true; partyCheckCursor = 0; Sfx.play('confirm'); }
@@ -345,28 +425,35 @@ const Overworld = (() => {
       else if (near && Input.pressed('confirm')) interact(near);
     }
 
-    // atmosphere: fireflies, campfire embers, and a swirling portal
+    streamChunks();   // load/unload chunks around the player (budgeted)
+
+    // atmosphere: fireflies drift around the player; embers + portal swirl near
+    // their landmarks (only when the origin is in range)
     fireflyT -= dt;
     if (fireflyT <= 0) {
-      fireflyT = 0.5;
-      const a = Math.random() * Math.PI * 2, rad = 3 + Math.random() * 11;
-      Fx.spawn({ p: [Math.cos(a) * rad, 0.4 + Math.random() * 1.2, Math.sin(a) * rad], c: [0.65, 1, 0.45],
+      fireflyT = 0.4;
+      const a = Math.random() * Math.PI * 2, rad = 3 + Math.random() * 12;
+      Fx.spawn({ p: [hero.pos[0] + Math.cos(a) * rad, 0.4 + Math.random() * 1.2, hero.pos[2] + Math.sin(a) * rad], c: [0.65, 1, 0.45],
                  v: [(Math.random() - 0.5) * 0.4, 0.12, (Math.random() - 0.5) * 0.4], g: 0, drag: 0.2, life: 2.6 + Math.random() * 2, s: 0.035, s1: 0.01 });
     }
-    emberT -= dt;
-    if (emberT <= 0) {
-      emberT = 0.14;
-      Fx.spawn({ p: [FIRE_POS[0] + (Math.random() - 0.5) * 0.25, 0.25, FIRE_POS[2] + (Math.random() - 0.5) * 0.25],
-                 c: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.95, 0.3, 0.1]][Math.floor(Math.random() * 3)],
-                 v: [(Math.random() - 0.5) * 0.3, 0.9 + Math.random() * 0.7, (Math.random() - 0.5) * 0.3], g: 0.4, drag: 0.4, life: 0.7 + Math.random() * 0.5, s: 0.06, s1: 0.01 });
+    if (M3.dist(hero.pos, FIRE_POS) < 16) {
+      emberT -= dt;
+      if (emberT <= 0) {
+        emberT = 0.14;
+        Fx.spawn({ p: [FIRE_POS[0] + (Math.random() - 0.5) * 0.25, 0.25, FIRE_POS[2] + (Math.random() - 0.5) * 0.25],
+                   c: [[1, 0.48, 0.16], [1, 0.72, 0.2], [0.95, 0.3, 0.1]][Math.floor(Math.random() * 3)],
+                   v: [(Math.random() - 0.5) * 0.3, 0.9 + Math.random() * 0.7, (Math.random() - 0.5) * 0.3], g: 0.4, drag: 0.4, life: 0.7 + Math.random() * 0.5, s: 0.06, s1: 0.01 });
+      }
     }
-    swirlT -= dt;
-    if (swirlT <= 0) {
-      swirlT = 0.05;
-      const a = t * 3 + Math.random() * 0.5, rr = 0.6 + Math.random() * 1.2;
-      Fx.spawn({ p: [PORTAL_POS[0] + Math.cos(a) * rr, 1.6 + Math.sin(a * 1.7) * 1.1, PORTAL_POS[2]],
-                 c: [[0.7, 0.3, 1], [0.95, 0.4, 1], [1, 1, 1]][Math.floor(Math.random() * 3)],
-                 v: [-Math.cos(a) * 0.9, 0, 0.2], g: 0, drag: 0.4, life: 0.6, s: 0.04, s1: 0.01 });
+    if (M3.dist(hero.pos, PORTAL_POS) < 18) {
+      swirlT -= dt;
+      if (swirlT <= 0) {
+        swirlT = 0.05;
+        const a = t * 3 + Math.random() * 0.5, rr = 0.6 + Math.random() * 1.2;
+        Fx.spawn({ p: [PORTAL_POS[0] + Math.cos(a) * rr, 1.6 + Math.sin(a * 1.7) * 1.1, PORTAL_POS[2]],
+                   c: [[0.7, 0.3, 1], [0.95, 0.4, 1], [1, 1, 1]][Math.floor(Math.random() * 3)],
+                   v: [-Math.cos(a) * 0.9, 0, 0.2], g: 0, drag: 0.4, life: 0.6, s: 0.04, s1: 0.01 });
+      }
     }
 
     Cam.follow(hero.pos, camYaw, { dist: 4.4, height: 2.3 }, dt);
@@ -377,13 +464,13 @@ const Overworld = (() => {
   function render3d(aspect) {
     const { view, proj } = Cam.matrices(aspect);
     Gfx.begin(view, proj, ENV);
-    Gfx.draw(staticH, null, {});
+    for (const c of chunks.values()) if (c.handle) Gfx.draw(c.handle, null, {});
     const bob = moving ? Math.abs(Math.sin(bobT)) * 0.05 : 0;
     Gfx.draw(hero.h, M3.trs(mTmp, [hero.pos[0], hero.pos[1] + bob, hero.pos[2]], [hero.yaw, 0, 0], [1, 1, 1]), {});
-    for (const n of NPCS) {
+    eachNpc((n) => {
       const nb = 1 + 0.012 * Math.sin(t * 1.8 + n.pos[0]);
       Gfx.draw(n.h, M3.trs(mTmp, n.pos, [n.yaw, 0, 0], [1, nb, 1]), {});
-    }
+    });
     const pd = Fx.particleData();
     Gfx.drawDynamic(pd.data, pd.count);
   }
@@ -399,7 +486,7 @@ const Overworld = (() => {
   function renderUi(ctx) {
     if (optionsView) { drawOptions(ctx); drawToast(ctx); return; }
     if (partyView) { UI.partyPanel(ctx, savePartyRows(), partyCheckCursor, t, false); return; }
-    if (cardT > 0) UI.locationCard(ctx, 'WHISPER GROVE', M3.clamp(cardT, 0, 1));
+    if (cardT > 0) UI.locationCard(ctx, 'WHISPER WILDS', M3.clamp(cardT, 0, 1));
     if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk   C: Party', 'O: Options   M: Mute']);
     drawToast(ctx);
     if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }

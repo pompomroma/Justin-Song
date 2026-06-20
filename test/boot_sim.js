@@ -40,7 +40,7 @@ function makeGl() {
   const FNS = ['createShader', 'shaderSource', 'compileShader', 'getShaderInfoLog',
     'createProgram', 'attachShader', 'bindAttribLocation', 'linkProgram',
     'getProgramInfoLog', 'useProgram', 'enable', 'depthFunc', 'disable', 'blendFunc',
-    'createBuffer', 'bindBuffer', 'bufferData', 'viewport', 'clearColor', 'clear',
+    'createBuffer', 'deleteBuffer', 'bindBuffer', 'bufferData', 'viewport', 'clearColor', 'clear',
     'uniformMatrix4fv', 'uniform3fv', 'uniform1f', 'enableVertexAttribArray',
     'vertexAttribPointer', 'drawArrays'];
   for (const f of FNS) gl[f] = () => ({ id: ++gl._n });
@@ -497,6 +497,29 @@ const tap = (sb, code) => { press(sb, code); sb.__pump(2); };
   ok(vm.runInContext('__Game.save.difficulty === 5', sb), 'difficulty persisted on the save');
   sb.__pump(200);
   ok(sb.__errors.length === 0, 'no errors at difficulty 5 with enemy AI / switching' + (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ------------------------------- run 16: infinite world chunk streaming
+{
+  const sb = makeSandbox('#overworld');
+  sb.__pump(5);
+  sb.__dispatch('keydown', { code: 'KeyW', repeat: false });
+  sb.__dispatch('keydown', { code: 'KeyD', repeat: false });
+  sb.__pump(2000);                 // long diagonal walk -> many chunk loads/unloads/disposes
+  sb.__dispatch('keyup', { code: 'KeyW' });
+  sb.__dispatch('keyup', { code: 'KeyD' });
+  sb.__pump(40);
+  ok(sb.__errors.length === 0, 'infinite overworld streams chunks over a long walk without errors' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+  // turn around and walk back across the same chunks (regenerated deterministically)
+  sb.__dispatch('keydown', { code: 'KeyS', repeat: false });
+  sb.__dispatch('keydown', { code: 'KeyA', repeat: false });
+  sb.__pump(1200);
+  sb.__dispatch('keyup', { code: 'KeyS' });
+  sb.__dispatch('keyup', { code: 'KeyA' });
+  sb.__pump(20);
+  ok(sb.__errors.length === 0, 'walking back regenerates chunks without errors' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');

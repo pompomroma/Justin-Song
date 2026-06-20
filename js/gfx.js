@@ -89,6 +89,11 @@ void main() {
     return { buf, count: mesh.count };
   }
 
+  // free a static buffer (used by the streaming overworld to drop far chunks)
+  function dispose(handle) {
+    if (handle && handle.buf && gl) gl.deleteBuffer(handle.buf);
+  }
+
   function bindAttribs() {
     gl.enableVertexAttribArray(0);
     gl.enableVertexAttribArray(1);
@@ -155,5 +160,5 @@ void main() {
     catch (e) { return 4096; }
   }
 
-  return { init, upload, begin, draw, drawDynamic, maxDim, ok: () => !!gl };
+  return { init, upload, dispose, begin, draw, drawDynamic, maxDim, ok: () => !!gl };
 })();

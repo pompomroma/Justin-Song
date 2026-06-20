@@ -94,7 +94,13 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
                'Arrows: Move   E: Pick   X: Delete', 'Press any key', 'X: Skip',
                'OPTIONS', 'Rename', 'Difficulty', 'Save', 'Export', 'Import', 'Close',
                'Save code ready.', 'Game saved!', 'E: Pick   X: Close', 'E: Set   X: Back',
-               'O: Options   M: Mute', 'E: Talk   C: Party');
+               'O: Options   M: Mute', 'E: Talk   C: Party',
+               'WHISPER WILDS', 'Ranger', 'Wanderer', 'Nomad', 'Scout', 'Hunter', 'Warden', 'Drifter', 'Pilgrim',
+               'KAI', 'VEX', 'MARA', 'TOLI', 'BREN', 'SUNE', 'RILEY', 'ODA', 'NIX', 'PERA',
+               'Ranger KAI wants to battle!', 'You there - let us test your bond!',
+               'The wilds favor the bold. Battle me!', 'No path forward without a fight!',
+               'You have the look of a challenger!', 'Good battle. Safe travels.',
+               'You are tougher than this terrain.', 'Go on - the wilds are calling.');
   strings.push('Lv.10', 'Lv.15', 'Lv.16', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
                'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'M: Mute   T: Stats', 'E  Talk', 'E  Enter the Rift',
                'MODEL VIEWER  (Left/Right to cycle)', '0123456789',
