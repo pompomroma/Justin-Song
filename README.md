@@ -6,15 +6,20 @@ A Pokemon-style, turn-based battle RPG prototype rendered entirely in
 files. Everything (models, font, UI, sound) is generated procedurally
 in vanilla JavaScript, so it runs on a completely empty Replit project.
 
-Roam an **endless, procedurally generated forest** — a Minecraft-style
-world that streams in **16-unit chunks** around you, deterministically
-spawning trees, rocks, grass and **wandering trainers** at a controlled
-density (tougher the farther you wander). Challenge them with your party
-of **PIXLIT**, **THORNLET** and **EMBERIK**, then return to the origin and
-step through the dark **rift portal** into an intimidating dungeon to face
-the boss, **VORNETH**. Expect dynamic camera swings, screen shake,
-hitstop, bullet-time, voxel particle storms and a classic text-driven
-turn system (PP, stat stages, crits, misses).
+Roam an **endless, procedurally generated world** — a Minecraft-style
+landscape that streams in **16-unit chunks** around you. A low-frequency
+temperature/moisture noise field carves it into large, coherent **biomes**
+— **Whisper Forest**, **Open Prairie**, **Sunfall Desert**, **Frost Tundra**
+and **Golden Savanna** — each with its own ground, scenery (trees, cacti,
+ice spikes…), sky/light ambiance, and **monster pool**, so the wildlife
+changes as you cross from one to the next (e.g. **SANDREK** in the desert,
+the ICE-type **FROSTKIT** in the tundra). **Wandering trainers** spawn at a
+controlled density and get tougher the farther you go. Challenge them with
+your party of **PIXLIT**, **THORNLET** and **EMBERIK**, then return to the
+origin and step through the dark **rift portal** into an intimidating dungeon
+to face the boss, **VORNETH**. Expect dynamic camera swings, screen shake,
+hitstop, bullet-time, voxel particle storms and a classic text-driven turn
+system (PP, stat stages, crits, misses).
 
 **The boss, VORNETH:** in the dungeon it looms atop a cliff while the
 camera tilts up at it (Dynamax/Gigantamax-style framing). Drop it below
@@ -209,8 +214,10 @@ title menu (New Game on an empty slot, pick a difficulty) → wake cutscene →
 tutorial battle vs the GIANT (drop it below half HP for the enrage + its
 telegraphed Giga Beam) → faint → name yourself → grove → **O** Options
 (rename / difficulty / save / export+import a save code) → **wander far** in
-any direction (the world keeps generating; trainers get tougher) and battle
-the procedurally spawned trainers at different difficulties → each action
+any direction (the world keeps generating; you cross into desert / tundra /
+prairie / savanna biomes — watch the ground, scenery, sky and the monsters
+change) and battle the procedurally spawned trainers at different difficulties
+→ each action
 (Attack, Items, Capture, Run, party switch with **C**) → return to the origin
 portal → boss intro atop the cliff with the upward camera → knock VORNETH below half
 HP for its transformation climax → defeat or capture it → field the captured

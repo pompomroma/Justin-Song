@@ -10,11 +10,11 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const FILES = ['math3d', 'voxel', 'models', 'font', 'battle_data', 'save', 'fx'];
+const FILES = ['math3d', 'voxel', 'models', 'font', 'battle_data', 'save', 'biome', 'fx'];
 const src = FILES.map((f) => fs.readFileSync(path.join(root, 'js', f + '.js'), 'utf8')).join('\n;\n') +
-  '\n;({ M3, Vox, Models, PFont, BData, Fx, Save, Cloud })';
+  '\n;({ M3, Vox, Models, PFont, BData, Fx, Save, Cloud, Biome })';
 const api = vm.runInThisContext(src, { filename: 'bundle.js' });
-const { M3, Vox, Models, PFont, BData, Fx, Save, Cloud } = api;
+const { M3, Vox, Models, PFont, BData, Fx, Save, Cloud, Biome } = api;
 
 let passed = 0, failed = 0;
 function ok(cond, name) {
@@ -101,6 +101,7 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
                'The wilds favor the bold. Battle me!', 'No path forward without a fight!',
                'You have the look of a challenger!', 'Good battle. Safe travels.',
                'You are tougher than this terrain.', 'Go on - the wilds are calling.');
+  for (const k in Biome.BIOMES) strings.push(Biome.BIOMES[k].name);
   strings.push('Lv.10', 'Lv.15', 'Lv.16', '17/28', 'HP', '▼', 'WHISPER GROVE', 'MUTED',
                'WASD/Arrows: Move', 'E: Talk / Confirm', 'M: Mute sound', 'M: Mute   T: Stats', 'E  Talk', 'E  Enter the Rift',
                'MODEL VIEWER  (Left/Right to cycle)', '0123456789',
@@ -199,6 +200,8 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
 {
   ok(BData.typeEff('PSY', 'VOID') === 2 && BData.typeEff('VOID', 'PSY') === 0.5, 'type chart 4-cycle (PSY > VOID)');
   ok(BData.typeEff('FIRE', 'LEAF') === 2 && BData.typeEff('LEAF', 'FIRE') === 0.5, 'type chart 4-cycle (FIRE > LEAF)');
+  ok(BData.typeEff('FIRE', 'ICE') === 2 && BData.typeEff('ICE', 'FIRE') === 0.5, 'ICE: FIRE melts ICE');
+  ok(BData.typeEff('ICE', 'LEAF') === 2 && BData.typeEff('LEAF', 'ICE') === 0.5, 'ICE freezes LEAF');
   ok(BData.typeEff('NORMAL', 'VOID') === 1 && BData.typeEff('PSY', undefined) === 1, 'NORMAL / untyped are neutral');
 
   // STAB + effectiveness raise damage; untyped stays the legacy value
@@ -259,6 +262,31 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
   ok(Cloud.available() === false, 'cloud sync is OFF by default (no endpoint configured)');
   const p = Cloud.push('x', s);
   ok(p && typeof p.then === 'function', 'Cloud.push is a safe no-op promise without fetch');
+}
+
+// ----------------------------------------------------- biomes (Minecraft-ish)
+{
+  ok(Biome.at(123, -456).id === Biome.at(123, -456).id, 'biome lookup is deterministic');
+  ok(Biome.at(0, 0).id === 'FOREST' && Biome.at(6, 4).id === 'FOREST', 'origin neighborhood is forced FOREST (starter clearing)');
+
+  // low-frequency noise -> large coherent regions (adjacent samples rarely differ)
+  let same = 0;
+  for (let i = 0; i < 200; i++) { const x = 211 + i, z = 137; if (Biome.at(x, z).id === Biome.at(x + 1, z).id) same++; }
+  ok(same > 180, 'biomes form large coherent regions (' + same + '/200 adjacent samples match)');
+
+  // diversity: every biome appears somewhere across a wide grid
+  const seen = {};
+  for (let z = -700; z <= 700; z += 17)
+    for (let x = -700; x <= 700; x += 17) seen[Biome.at(x, z).id] = true;
+  const ids = ['FOREST', 'PRAIRIE', 'DESERT', 'ICE', 'SAVANNA'];
+  ok(ids.every((k) => seen[k]), 'all 5 biomes generate across the world (' + Object.keys(seen).join(',') + ')');
+
+  ok(ids.every((k) => { const b = Biome.BIOMES[k]; return b.monsters.length && b.scatter.length && b.env && b.ground.grass.length === 3; }),
+     'each biome defines monsters, scatter, ground and env');
+  ok(ids.every((k) => Biome.BIOMES[k].monsters.every((sp) => !!BData.SPECIES[sp])),
+     'biome monster pools reference real species');
+  ok(!!BData.SPECIES.FROSTKIT && BData.SPECIES.FROSTKIT.type === 'ICE' && !!BData.SPECIES.SANDREK,
+     'new biome monsters exist (FROSTKIT is ICE-type)');
 }
 
 // --------------------------------------------------- Monte-Carlo balance

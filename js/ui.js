@@ -20,6 +20,7 @@ const UI = (() => {
     FIRE:   { base: '#f08030', hi: '#f8a060', dark: '#9c4a12' },
     LEAF:   { base: '#78b048', hi: '#9ad06e', dark: '#46702a' },
     VOID:   { base: '#7a3cc8', hi: '#a86ee6', dark: '#3c1a6e' },
+    ICE:    { base: '#5aa6d8', hi: '#8fcdf0', dark: '#2f6890' },
   };
 
   // top-level battle actions + item buttons

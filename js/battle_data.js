@@ -15,6 +15,11 @@ const BData = (() => {
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
     MAGMULE:  { name: 'MAGMULE',  type: 'FIRE', base: { hp: 52, atk: 32, def: 42, spe: 35 },
                 moves: ['TACKLE', 'CINDER', 'GROWL'] },
+    // biome-specific wild monsters
+    FROSTKIT: { name: 'FROSTKIT', type: 'ICE',  base: { hp: 44, atk: 64, def: 50, spe: 58 },
+                moves: ['TACKLE', 'GROWL', 'FROSTBITE', 'ICESHARD'] },   // tundra
+    SANDREK:  { name: 'SANDREK',  type: 'FIRE', base: { hp: 58, atk: 70, def: 66, spe: 30 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // desert
     // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
     // into its true form mid-battle; statsFor() resolves each form's block.
     VORNETH:   { name: 'VORNETH', type: 'VOID', base: { hp: 80, atk: 60, def: 60, spe: 50 },
@@ -49,6 +54,10 @@ const BData = (() => {
                  anim: 'beam',   fx: [[0.55, 0.95, 0.4], W, [0.3, 0.75, 0.3]] },
     SEEDBURST: { name: 'Seedburst', type: 'LEAF',   power: 70, acc: 90,  pp: 15,
                  anim: 'volley', fx: [[0.55, 0.95, 0.4], [0.85, 0.7, 0.3], [0.3, 0.75, 0.3]] },
+    FROSTBITE: { name: 'Frostbite', type: 'ICE',    power: 55, acc: 100, pp: 18,
+                 anim: 'beam',   fx: [[0.7, 0.92, 1], [1, 1, 1], [0.5, 0.78, 1]] },
+    ICESHARD:  { name: 'Ice Shard', type: 'ICE',    power: 65, acc: 95,  pp: 15,
+                 anim: 'volley', fx: [[0.8, 0.95, 1], [0.6, 0.85, 1], [1, 1, 1]] },
     // boss moves (bespoke 'void' animations, grandest in the game)
     VOIDLANCE: { name: 'Void Lance', type: 'VOID', power: 60, acc: 100, pp: 15,
                  anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.5, 0.12, 0.7]] },
@@ -75,10 +84,11 @@ const BData = (() => {
      ways): FIRE>LEAF>PSY>VOID>FIRE. typeEff(undefined, ...) is 1, so damage
      goldens computed without species types are unchanged. */
   const TYPE_CHART = {
-    FIRE: { LEAF: 2, VOID: 0.5 },
-    LEAF: { PSY: 2, FIRE: 0.5 },
+    FIRE: { LEAF: 2, ICE: 2, VOID: 0.5 },
+    LEAF: { PSY: 2, FIRE: 0.5, ICE: 0.5 },
     PSY:  { VOID: 2, LEAF: 0.5 },
     VOID: { FIRE: 2, PSY: 0.5 },
+    ICE:  { LEAF: 2, FIRE: 0.5 },
   };
   function typeEff(atkType, defType) {
     if (!atkType || !defType) return 1;

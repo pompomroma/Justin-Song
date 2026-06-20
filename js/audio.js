@@ -151,6 +151,8 @@ const Sfx = (() => {
     DREADWAVE: () => { tone({ f0: 140, f1: 90, dur: 0.5, vol: 0.2, type: 'sawtooth' }); tone({ f0: 70, f1: 46, dur: 0.6, vol: 0.26, type: 'sine' }); noise({ f0: 600, f1: 160, dur: 0.5, vol: 0.12, ftype: 'lowpass' }); },
     ABYSSNOVA: () => { noise({ f0: 800, f1: 48, dur: 0.7, vol: 0.6, ftype: 'lowpass', q: 1.2 }); tone({ f0: 80, f1: 26, dur: 0.7, vol: 0.4, type: 'sine' }); [330, 466, 622].forEach((f, i) => tone({ f0: f, dur: 0.6, vol: 0.1, type: 'sawtooth', delay: i * 0.02 })); },
     AWAKEN: () => { tone({ f0: 120, f1: 900, dur: 0.8, vol: 0.2, type: 'sawtooth' }); tone({ f0: 60, f1: 200, dur: 0.8, vol: 0.2, type: 'sine' }); noise({ f0: 400, f1: 4000, dur: 0.8, vol: 0.12, ftype: 'bandpass', q: 1 }); },
+    FROSTBITE: () => { tone({ f0: 1400, f1: 520, dur: 0.4, vol: 0.12, type: 'triangle' }); noise({ f0: 5200, f1: 2600, dur: 0.34, vol: 0.1, ftype: 'highpass' }); tone({ f0: 180, f1: 90, dur: 0.3, vol: 0.16, type: 'sine', delay: 0.18 }); },
+    ICESHARD: () => { for (let i = 0; i < 5; i++) tone({ f0: 1800 - i * 120, f1: 700, dur: 0.06, vol: 0.1, type: 'triangle', delay: i * 0.05 }); noise({ f0: 6000, f1: 3000, dur: 0.2, vol: 0.08, ftype: 'highpass', delay: 0.1 }); },
   };
 
   // synthesized "voice" blip — a short vowel-ish formant chirp keyed off the

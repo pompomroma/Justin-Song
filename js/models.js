@@ -159,6 +159,50 @@ const Models = (() => {
     return { g, colors, s: 0.058, jitter: 0.07 };
   }
 
+  // FROSTKIT — pale tundra fox: frost-white coat, icy-blue accents, glowing
+  // frozen tail tip. Faces +z. ~0.8u. (ICE-type; spawns in the tundra biome.)
+  function frostkit() {
+    const g = Vox.grid(13, 14, 17);
+    const C = { coat: 0, belly: 1, paw: 2, glow: 3, eye: 4, ear: 5 };
+    const colors = pal('#dfeefb', '#f4fbff', '#8fb6d6', '#7fe0ff', '#2e3640', '#a9cfe8');
+    g.ellipsoid(6, 4.5, 7, 3.8, 3.2, 4.8, C.coat);
+    g.ellipsoid(6, 4, 10.5, 3, 2.6, 2.6, C.coat);
+    for (let z = 8; z <= 13; z++)
+      for (let x = 4; x <= 8; x++)
+        for (let y = 1; y <= 3; y++) if (g.get(x, y, z)) g.set(x, y, z, C.belly);
+    g.box(4, 6, 11, 8, 9, 14, C.coat);
+    g.box(5, 6, 14, 7, 7, 14, C.belly);                 // muzzle
+    g.set(4, 10, 12, C.ear); g.set(4, 11, 12, C.ear);   // ears (mirrored)
+    for (const z of [4, 10]) { g.box(4, 0, z, 5, 1, z + 1, C.paw); g.box(8, 0, z, 9, 0, z + 1, C.paw); }
+    g.box(6, 4, 1, 6, 6, 2, C.coat);                    // tail
+    g.box(6, 7, 1, 6, 8, 1, C.glow);                    // frosty tail tip
+    g.set(6, 9, 1, C.glow);
+    g.set(7, 6, 11, C.glow);                            // chest frost (mirrors)
+    g.mirrorX();
+    g.set(5, 8, 14, C.eye); g.set(7, 8, 14, C.eye);
+    return { g, colors, s: 0.058, jitter: 0.06 };
+  }
+
+  // SANDREK — desert rock-beast: tan hide, plated rocky spine, glowing magma
+  // cracks, blunt horns. Faces +z. ~1.0u long. (FIRE-type; desert biome.)
+  function sandrek() {
+    const g = Vox.grid(15, 14, 23);
+    const C = { hide: 0, belly: 1, rock: 2, rockD: 3, eye: 4, claw: 5, glow: 6 };
+    const colors = pal('#c89a54', '#dcb877', '#9a7a4a', '#6f5634', '#2e2620', '#7a5a34', '#ff7a2a');
+    for (const z of [4, 15]) { g.box(9, 0, z, 11, 3, z + 2, C.hide); g.box(9, 0, z, 11, 0, z + 2, C.claw); }
+    g.box(4, 3, 4, 10, 8, 18, C.hide);
+    g.ellipsoid(7, 6, 4, 4, 3, 3, C.hide); g.ellipsoid(7, 6, 18, 4, 3, 3.4, C.hide);
+    for (let z = 5; z <= 17; z++) for (let x = 4; x <= 10; x++) if (g.get(x, 3, z)) g.set(x, 3, z, C.belly);
+    for (let z = 6; z <= 16; z += 2) { g.set(7, 9, z, C.rock); g.set(7, 10, z, C.rockD); g.set(8, 9, z + 1, C.rock); }
+    g.box(5, 5, 18, 9, 9, 21, C.hide);
+    g.box(6, 5, 21, 8, 7, 21, C.belly);                 // snout
+    g.set(8, 8, 21, C.eye);                             // eye (mirrors)
+    g.set(9, 9, 19, C.rock);                            // brow horn (mirrors)
+    g.set(10, 5, 9, C.glow); g.set(10, 6, 13, C.glow);  // magma flank cracks
+    g.mirrorX();
+    return { g, colors, s: 0.07, jitter: 0.07 };
+  }
+
   // Voxball — the capture ball (red top, white bottom, dark band).
   function ball() {
     const g = Vox.grid(7, 7, 7);
@@ -522,6 +566,33 @@ const Models = (() => {
     return { g, colors, s: 0.12, jitter: 0.12 };
   }
 
+  // cactus — desert saguaro: green column with a raised arm and a crown bud
+  function cactus() {
+    const g = Vox.grid(11, 18, 7);
+    const C = { body: 0, dark: 1, flower: 2 };
+    const colors = pal('#3e8e4a', '#2f6f38', '#e86fa4');
+    g.box(4, 0, 2, 6, 15, 4, C.body);          // trunk
+    g.box(7, 7, 3, 8, 8, 3, C.body);           // right arm elbow
+    g.box(8, 8, 3, 8, 11, 3, C.body);          // right arm up
+    g.set(5, 16, 3, C.flower); g.set(5, 17, 3, C.flower); // crown bud
+    for (let y = 2; y < 15; y += 3) g.set(7, y, 3, C.dark); // ribs (mirror -> left)
+    g.mirrorX();
+    return { g, colors, s: 0.085, jitter: 0.07 };
+  }
+
+  // ice spike — pale frozen crystal shard for the tundra biome
+  function ice_spike() {
+    const g = Vox.grid(9, 20, 9);
+    const colors = pal('#cfe6f4', '#9fc4e0', '#eef7ff');
+    for (let y = 0; y < 20; y++) {
+      const rad = 3.6 * (1 - y / 22);
+      for (let z = 0; z < 9; z++)
+        for (let x = 0; x < 9; x++) { const dx = x - 4, dz = z - 4; if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, (x + z + y) % 4 ? 0 : 1); }
+    }
+    for (let y = 3; y < 17; y += 4) g.set(4, y, 7, 2); // glints
+    return { g, colors, s: 0.12, jitter: 0.1 };
+  }
+
   const npc_hiker = () => humanoid({ skin: '#d8a878', hair: '#3a2a1a', top: '#6b8e3a', sleeve: '#4a6328', legs: '#5a4a32', shoe: '#3a2e20', cap: '#7a5a30', capBrim: true }, 'idle');
   const npc_lass  = () => humanoid({ skin: '#ecc0a0', hair: '#d86a30', top: '#e87aa0', sleeve: '#c85a86', legs: '#9a5ab0', shoe: '#6a3a80' }, 'idle');
   const npc_ace   = () => humanoid({ skin: '#caa078', hair: '#1a2a4a', top: '#2a3a6a', sleeve: '#1c2a52', legs: '#23304a', shoe: '#161c30', cap: '#2a3a6a', capBrim: true }, 'idle');
@@ -584,8 +655,9 @@ const Models = (() => {
   // ================================================================= cache
 
   const BUILDERS = {
-    pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
-    vorneth, vorneth_x, protector, giant, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
+    pixlit, magmule, thornlet, emberik, frostkit, sandrek, ball, hero, rex_idle, rex_raised,
+    vorneth, vorneth_x, protector, giant, portal, cliff, spire, cactus, ice_spike,
+    npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,

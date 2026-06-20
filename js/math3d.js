@@ -108,10 +108,12 @@ const M3 = (() => {
     m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]);
 
   /* Bake an interleaved mesh (pos3,nrm3,col3 — stride 9) into dst at dstOff,
-     applying yaw rotation, uniform scale and translation. Returns new offset.
-     Used to merge static scenery into a single buffer. */
-  const bakeMesh = (dst, dstOff, src, count, pos, yaw, s) => {
+     applying yaw rotation, uniform scale and translation. Optional tint
+     multiplies the vertex colors (used to recolor scenery per biome). Returns
+     the new offset. Used to merge static scenery into a single buffer. */
+  const bakeMesh = (dst, dstOff, src, count, pos, yaw, s, tint) => {
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const tr = tint ? tint[0] : 1, tg = tint ? tint[1] : 1, tb = tint ? tint[2] : 1;
     for (let i = 0; i < count; i++) {
       const o = i * 9;
       const px = src[o], py = src[o + 1], pz = src[o + 2];
@@ -122,9 +124,9 @@ const M3 = (() => {
       dst[dstOff++] = cy * nx + sy * nz;
       dst[dstOff++] = ny;
       dst[dstOff++] = -sy * nx + cy * nz;
-      dst[dstOff++] = src[o + 6];
-      dst[dstOff++] = src[o + 7];
-      dst[dstOff++] = src[o + 8];
+      dst[dstOff++] = src[o + 6] * tr;
+      dst[dstOff++] = src[o + 7] * tg;
+      dst[dstOff++] = src[o + 8] * tb;
     }
     return dstOff;
   };

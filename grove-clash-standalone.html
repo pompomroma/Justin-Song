@@ -163,10 +163,12 @@ const M3 = (() => {
     m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]);
 
   /* Bake an interleaved mesh (pos3,nrm3,col3 — stride 9) into dst at dstOff,
-     applying yaw rotation, uniform scale and translation. Returns new offset.
-     Used to merge static scenery into a single buffer. */
-  const bakeMesh = (dst, dstOff, src, count, pos, yaw, s) => {
+     applying yaw rotation, uniform scale and translation. Optional tint
+     multiplies the vertex colors (used to recolor scenery per biome). Returns
+     the new offset. Used to merge static scenery into a single buffer. */
+  const bakeMesh = (dst, dstOff, src, count, pos, yaw, s, tint) => {
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const tr = tint ? tint[0] : 1, tg = tint ? tint[1] : 1, tb = tint ? tint[2] : 1;
     for (let i = 0; i < count; i++) {
       const o = i * 9;
       const px = src[o], py = src[o + 1], pz = src[o + 2];
@@ -177,9 +179,9 @@ const M3 = (() => {
       dst[dstOff++] = cy * nx + sy * nz;
       dst[dstOff++] = ny;
       dst[dstOff++] = -sy * nx + cy * nz;
-      dst[dstOff++] = src[o + 6];
-      dst[dstOff++] = src[o + 7];
-      dst[dstOff++] = src[o + 8];
+      dst[dstOff++] = src[o + 6] * tr;
+      dst[dstOff++] = src[o + 7] * tg;
+      dst[dstOff++] = src[o + 8] * tb;
     }
     return dstOff;
   };
@@ -575,6 +577,8 @@ const Sfx = (() => {
     DREADWAVE: () => { tone({ f0: 140, f1: 90, dur: 0.5, vol: 0.2, type: 'sawtooth' }); tone({ f0: 70, f1: 46, dur: 0.6, vol: 0.26, type: 'sine' }); noise({ f0: 600, f1: 160, dur: 0.5, vol: 0.12, ftype: 'lowpass' }); },
     ABYSSNOVA: () => { noise({ f0: 800, f1: 48, dur: 0.7, vol: 0.6, ftype: 'lowpass', q: 1.2 }); tone({ f0: 80, f1: 26, dur: 0.7, vol: 0.4, type: 'sine' }); [330, 466, 622].forEach((f, i) => tone({ f0: f, dur: 0.6, vol: 0.1, type: 'sawtooth', delay: i * 0.02 })); },
     AWAKEN: () => { tone({ f0: 120, f1: 900, dur: 0.8, vol: 0.2, type: 'sawtooth' }); tone({ f0: 60, f1: 200, dur: 0.8, vol: 0.2, type: 'sine' }); noise({ f0: 400, f1: 4000, dur: 0.8, vol: 0.12, ftype: 'bandpass', q: 1 }); },
+    FROSTBITE: () => { tone({ f0: 1400, f1: 520, dur: 0.4, vol: 0.12, type: 'triangle' }); noise({ f0: 5200, f1: 2600, dur: 0.34, vol: 0.1, ftype: 'highpass' }); tone({ f0: 180, f1: 90, dur: 0.3, vol: 0.16, type: 'sine', delay: 0.18 }); },
+    ICESHARD: () => { for (let i = 0; i < 5; i++) tone({ f0: 1800 - i * 120, f1: 700, dur: 0.06, vol: 0.1, type: 'triangle', delay: i * 0.05 }); noise({ f0: 6000, f1: 3000, dur: 0.2, vol: 0.08, ftype: 'highpass', delay: 0.1 }); },
   };
 
   // synthesized "voice" blip — a short vowel-ish formant chirp keyed off the
@@ -1221,6 +1225,50 @@ const Models = (() => {
     return { g, colors, s: 0.058, jitter: 0.07 };
   }
 
+  // FROSTKIT — pale tundra fox: frost-white coat, icy-blue accents, glowing
+  // frozen tail tip. Faces +z. ~0.8u. (ICE-type; spawns in the tundra biome.)
+  function frostkit() {
+    const g = Vox.grid(13, 14, 17);
+    const C = { coat: 0, belly: 1, paw: 2, glow: 3, eye: 4, ear: 5 };
+    const colors = pal('#dfeefb', '#f4fbff', '#8fb6d6', '#7fe0ff', '#2e3640', '#a9cfe8');
+    g.ellipsoid(6, 4.5, 7, 3.8, 3.2, 4.8, C.coat);
+    g.ellipsoid(6, 4, 10.5, 3, 2.6, 2.6, C.coat);
+    for (let z = 8; z <= 13; z++)
+      for (let x = 4; x <= 8; x++)
+        for (let y = 1; y <= 3; y++) if (g.get(x, y, z)) g.set(x, y, z, C.belly);
+    g.box(4, 6, 11, 8, 9, 14, C.coat);
+    g.box(5, 6, 14, 7, 7, 14, C.belly);                 // muzzle
+    g.set(4, 10, 12, C.ear); g.set(4, 11, 12, C.ear);   // ears (mirrored)
+    for (const z of [4, 10]) { g.box(4, 0, z, 5, 1, z + 1, C.paw); g.box(8, 0, z, 9, 0, z + 1, C.paw); }
+    g.box(6, 4, 1, 6, 6, 2, C.coat);                    // tail
+    g.box(6, 7, 1, 6, 8, 1, C.glow);                    // frosty tail tip
+    g.set(6, 9, 1, C.glow);
+    g.set(7, 6, 11, C.glow);                            // chest frost (mirrors)
+    g.mirrorX();
+    g.set(5, 8, 14, C.eye); g.set(7, 8, 14, C.eye);
+    return { g, colors, s: 0.058, jitter: 0.06 };
+  }
+
+  // SANDREK — desert rock-beast: tan hide, plated rocky spine, glowing magma
+  // cracks, blunt horns. Faces +z. ~1.0u long. (FIRE-type; desert biome.)
+  function sandrek() {
+    const g = Vox.grid(15, 14, 23);
+    const C = { hide: 0, belly: 1, rock: 2, rockD: 3, eye: 4, claw: 5, glow: 6 };
+    const colors = pal('#c89a54', '#dcb877', '#9a7a4a', '#6f5634', '#2e2620', '#7a5a34', '#ff7a2a');
+    for (const z of [4, 15]) { g.box(9, 0, z, 11, 3, z + 2, C.hide); g.box(9, 0, z, 11, 0, z + 2, C.claw); }
+    g.box(4, 3, 4, 10, 8, 18, C.hide);
+    g.ellipsoid(7, 6, 4, 4, 3, 3, C.hide); g.ellipsoid(7, 6, 18, 4, 3, 3.4, C.hide);
+    for (let z = 5; z <= 17; z++) for (let x = 4; x <= 10; x++) if (g.get(x, 3, z)) g.set(x, 3, z, C.belly);
+    for (let z = 6; z <= 16; z += 2) { g.set(7, 9, z, C.rock); g.set(7, 10, z, C.rockD); g.set(8, 9, z + 1, C.rock); }
+    g.box(5, 5, 18, 9, 9, 21, C.hide);
+    g.box(6, 5, 21, 8, 7, 21, C.belly);                 // snout
+    g.set(8, 8, 21, C.eye);                             // eye (mirrors)
+    g.set(9, 9, 19, C.rock);                            // brow horn (mirrors)
+    g.set(10, 5, 9, C.glow); g.set(10, 6, 13, C.glow);  // magma flank cracks
+    g.mirrorX();
+    return { g, colors, s: 0.07, jitter: 0.07 };
+  }
+
   // Voxball — the capture ball (red top, white bottom, dark band).
   function ball() {
     const g = Vox.grid(7, 7, 7);
@@ -1584,6 +1632,33 @@ const Models = (() => {
     return { g, colors, s: 0.12, jitter: 0.12 };
   }
 
+  // cactus — desert saguaro: green column with a raised arm and a crown bud
+  function cactus() {
+    const g = Vox.grid(11, 18, 7);
+    const C = { body: 0, dark: 1, flower: 2 };
+    const colors = pal('#3e8e4a', '#2f6f38', '#e86fa4');
+    g.box(4, 0, 2, 6, 15, 4, C.body);          // trunk
+    g.box(7, 7, 3, 8, 8, 3, C.body);           // right arm elbow
+    g.box(8, 8, 3, 8, 11, 3, C.body);          // right arm up
+    g.set(5, 16, 3, C.flower); g.set(5, 17, 3, C.flower); // crown bud
+    for (let y = 2; y < 15; y += 3) g.set(7, y, 3, C.dark); // ribs (mirror -> left)
+    g.mirrorX();
+    return { g, colors, s: 0.085, jitter: 0.07 };
+  }
+
+  // ice spike — pale frozen crystal shard for the tundra biome
+  function ice_spike() {
+    const g = Vox.grid(9, 20, 9);
+    const colors = pal('#cfe6f4', '#9fc4e0', '#eef7ff');
+    for (let y = 0; y < 20; y++) {
+      const rad = 3.6 * (1 - y / 22);
+      for (let z = 0; z < 9; z++)
+        for (let x = 0; x < 9; x++) { const dx = x - 4, dz = z - 4; if (dx * dx + dz * dz <= rad * rad) g.set(x, y, z, (x + z + y) % 4 ? 0 : 1); }
+    }
+    for (let y = 3; y < 17; y += 4) g.set(4, y, 7, 2); // glints
+    return { g, colors, s: 0.12, jitter: 0.1 };
+  }
+
   const npc_hiker = () => humanoid({ skin: '#d8a878', hair: '#3a2a1a', top: '#6b8e3a', sleeve: '#4a6328', legs: '#5a4a32', shoe: '#3a2e20', cap: '#7a5a30', capBrim: true }, 'idle');
   const npc_lass  = () => humanoid({ skin: '#ecc0a0', hair: '#d86a30', top: '#e87aa0', sleeve: '#c85a86', legs: '#9a5ab0', shoe: '#6a3a80' }, 'idle');
   const npc_ace   = () => humanoid({ skin: '#caa078', hair: '#1a2a4a', top: '#2a3a6a', sleeve: '#1c2a52', legs: '#23304a', shoe: '#161c30', cap: '#2a3a6a', capBrim: true }, 'idle');
@@ -1646,8 +1721,9 @@ const Models = (() => {
   // ================================================================= cache
 
   const BUILDERS = {
-    pixlit, magmule, thornlet, emberik, ball, hero, rex_idle, rex_raised,
-    vorneth, vorneth_x, protector, giant, portal, cliff, spire, npc_hiker, npc_lass, npc_ace,
+    pixlit, magmule, thornlet, emberik, frostkit, sandrek, ball, hero, rex_idle, rex_raised,
+    vorneth, vorneth_x, protector, giant, portal, cliff, spire, cactus, ice_spike,
+    npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),
     rock0: () => rock(0), rock1: () => rock(1),
     bush, tuft, slab, campfire,
@@ -1858,6 +1934,7 @@ const UI = (() => {
     FIRE:   { base: '#f08030', hi: '#f8a060', dark: '#9c4a12' },
     LEAF:   { base: '#78b048', hi: '#9ad06e', dark: '#46702a' },
     VOID:   { base: '#7a3cc8', hi: '#a86ee6', dark: '#3c1a6e' },
+    ICE:    { base: '#5aa6d8', hi: '#8fcdf0', dark: '#2f6890' },
   };
 
   // top-level battle actions + item buttons
@@ -2816,6 +2893,11 @@ const BData = (() => {
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },
     MAGMULE:  { name: 'MAGMULE',  type: 'FIRE', base: { hp: 52, atk: 32, def: 42, spe: 35 },
                 moves: ['TACKLE', 'CINDER', 'GROWL'] },
+    // biome-specific wild monsters
+    FROSTKIT: { name: 'FROSTKIT', type: 'ICE',  base: { hp: 44, atk: 64, def: 50, spe: 58 },
+                moves: ['TACKLE', 'GROWL', 'FROSTBITE', 'ICESHARD'] },   // tundra
+    SANDREK:  { name: 'SANDREK',  type: 'FIRE', base: { hp: 58, atk: 70, def: 66, spe: 30 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // desert
     // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
     // into its true form mid-battle; statsFor() resolves each form's block.
     VORNETH:   { name: 'VORNETH', type: 'VOID', base: { hp: 80, atk: 60, def: 60, spe: 50 },
@@ -2850,6 +2932,10 @@ const BData = (() => {
                  anim: 'beam',   fx: [[0.55, 0.95, 0.4], W, [0.3, 0.75, 0.3]] },
     SEEDBURST: { name: 'Seedburst', type: 'LEAF',   power: 70, acc: 90,  pp: 15,
                  anim: 'volley', fx: [[0.55, 0.95, 0.4], [0.85, 0.7, 0.3], [0.3, 0.75, 0.3]] },
+    FROSTBITE: { name: 'Frostbite', type: 'ICE',    power: 55, acc: 100, pp: 18,
+                 anim: 'beam',   fx: [[0.7, 0.92, 1], [1, 1, 1], [0.5, 0.78, 1]] },
+    ICESHARD:  { name: 'Ice Shard', type: 'ICE',    power: 65, acc: 95,  pp: 15,
+                 anim: 'volley', fx: [[0.8, 0.95, 1], [0.6, 0.85, 1], [1, 1, 1]] },
     // boss moves (bespoke 'void' animations, grandest in the game)
     VOIDLANCE: { name: 'Void Lance', type: 'VOID', power: 60, acc: 100, pp: 15,
                  anim: 'voidbeam', fx: [[0.72, 0.34, 1], [1, 1, 1], [0.5, 0.12, 0.7]] },
@@ -2876,10 +2962,11 @@ const BData = (() => {
      ways): FIRE>LEAF>PSY>VOID>FIRE. typeEff(undefined, ...) is 1, so damage
      goldens computed without species types are unchanged. */
   const TYPE_CHART = {
-    FIRE: { LEAF: 2, VOID: 0.5 },
-    LEAF: { PSY: 2, FIRE: 0.5 },
+    FIRE: { LEAF: 2, ICE: 2, VOID: 0.5 },
+    LEAF: { PSY: 2, FIRE: 0.5, ICE: 0.5 },
     PSY:  { VOID: 2, LEAF: 0.5 },
     VOID: { FIRE: 2, PSY: 0.5 },
+    ICE:  { LEAF: 2, FIRE: 0.5 },
   };
   function typeEff(atkType, defType) {
     if (!atkType || !defType) return 1;
@@ -3306,6 +3393,102 @@ const Cloud = (() => {
 })();
 </script>
 <script>
+/* Grove Clash — js/biome.js
+   Biome: a Minecraft-style biome field for the infinite overworld. Two
+   low-frequency fBm value-noise channels (temperature + moisture) classify
+   the world into large, coherent regions, each with its own ground palette,
+   scenery scatter, atmosphere and monster pool. Pure (Node-safe) so the smoke
+   test can assert determinism and classification. */
+const Biome = (() => {
+
+  const SEED = 0x5eed;
+  const SCALE = 88;          // world units per noise lattice cell (big regions)
+
+  function h01(x, z, s) {     // hashed lattice value in [0,1)
+    let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s | 0, 2246822519) + SEED) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  const smooth = (t) => t * t * (3 - 2 * t);
+  function vnoise(x, z, s) {
+    const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
+    const u = smooth(xf), w = smooth(zf);
+    const a = h01(xi, zi, s), b = h01(xi + 1, zi, s), c = h01(xi, zi + 1, s), d = h01(xi + 1, zi + 1, s);
+    return (a * (1 - u) + b * u) * (1 - w) + (c * (1 - u) + d * u) * w;
+  }
+  // two octaves -> natural, wavy biome borders
+  const fbm = (x, z, s) => vnoise(x, z, s) * 0.65 + vnoise(x * 2.1 + 5.2, z * 2.1 + 1.3, s + 7) * 0.35;
+
+  function climate(wx, wz) {
+    return { temp: fbm(wx / SCALE, wz / SCALE, 1), moist: fbm(wx / SCALE + 40, wz / SCALE - 70, 2) };
+  }
+  function classify(temp, moist) {
+    if (temp < 0.32) return 'ICE';
+    if (temp > 0.68 && moist < 0.45) return 'DESERT';
+    if (moist > 0.60) return 'FOREST';
+    if (temp > 0.58) return 'SAVANNA';
+    return 'PRAIRIE';
+  }
+
+  const hex = M3.hex;
+  // ground: {grass:[3 colors], dirt:[2]}; scatter: ordered [type, weight] (the
+  // leftover weight is open ground); tint recolors scenery props; env tints the
+  // sky/fog/light when the player stands in the biome; monsters: spawn pool.
+  const BIOMES = {
+    FOREST: {
+      id: 'FOREST', name: 'WHISPER FOREST',
+      ground: { grass: [hex('#3f6d3a'), hex('#487c41'), hex('#36602f')], dirt: [hex('#6b5238'), hex('#7a5f40')] },
+      scatter: [['tree', 0.40], ['rock', 0.10], ['bush', 0.12], ['tuft', 0.33]],
+      tint: [1, 1, 1],
+      monsters: ['THORNLET', 'PIXLIT', 'EMBERIK'],
+      env: { sky: '#152238', fog: '#16261e', fogNear: 12, fogFar: 30, light: [0.82, 0.72, 0.58], ambient: [0.46, 0.52, 0.48] },
+    },
+    PRAIRIE: {
+      id: 'PRAIRIE', name: 'OPEN PRAIRIE',
+      ground: { grass: [hex('#6a8e3a'), hex('#7a9a44'), hex('#5e8232')], dirt: [hex('#8a6f44'), hex('#9a7d4e')] },
+      scatter: [['tree', 0.06], ['rock', 0.07], ['bush', 0.05], ['tuft', 0.55]],
+      tint: [1.05, 1.05, 0.85],
+      monsters: ['THORNLET', 'PIXLIT', 'MAGMULE'],
+      env: { sky: '#243650', fog: '#2c4030', fogNear: 14, fogFar: 34, light: [0.92, 0.86, 0.66], ambient: [0.54, 0.58, 0.5] },
+    },
+    DESERT: {
+      id: 'DESERT', name: 'SUNFALL DESERT',
+      ground: { grass: [hex('#d8c078'), hex('#cab062'), hex('#e0c884')], dirt: [hex('#b89a4a'), hex('#a88a3e')] },
+      scatter: [['cactus', 0.13], ['rock', 0.10], ['bush', 0.05], ['tuft', 0.05]],
+      tint: [1.15, 1.0, 0.7],
+      monsters: ['MAGMULE', 'EMBERIK', 'SANDREK'],
+      env: { sky: '#43381f', fog: '#6a5a3a', fogNear: 14, fogFar: 38, light: [1.0, 0.86, 0.6], ambient: [0.6, 0.54, 0.44] },
+    },
+    ICE: {
+      id: 'ICE', name: 'FROST TUNDRA',
+      ground: { grass: [hex('#dfe8f0'), hex('#cfdae8'), hex('#c2d0e2')], dirt: [hex('#aebfd4'), hex('#9fb2c8')] },
+      scatter: [['ice_spike', 0.12], ['rock', 0.09], ['tuft', 0.05]],
+      tint: [0.85, 0.95, 1.15],
+      monsters: ['FROSTKIT', 'PIXLIT', 'FROSTKIT'],
+      env: { sky: '#5a6a86', fog: '#a6b6c8', fogNear: 13, fogFar: 32, light: [0.85, 0.9, 1.0], ambient: [0.6, 0.64, 0.7] },
+    },
+    SAVANNA: {
+      id: 'SAVANNA', name: 'GOLDEN SAVANNA',
+      ground: { grass: [hex('#9a9440'), hex('#8a8636'), hex('#a8a04e')], dirt: [hex('#8a6f3a'), hex('#7a6332')] },
+      scatter: [['tree', 0.10], ['rock', 0.12], ['bush', 0.04], ['tuft', 0.42]],
+      tint: [1.2, 1.05, 0.6],
+      monsters: ['MAGMULE', 'EMBERIK', 'THORNLET'],
+      env: { sky: '#43402c', fog: '#5a4e2e', fogNear: 14, fogFar: 36, light: [1.0, 0.9, 0.62], ambient: [0.58, 0.56, 0.46] },
+    },
+  };
+
+  // biome at a world position. The origin neighborhood is forced FOREST so the
+  // spawn campfire / starter clearing always reads as a friendly grove.
+  function at(wx, wz) {
+    if (wx * wx + wz * wz < 42 * 42) return BIOMES.FOREST;
+    const c = climate(wx, wz);
+    return BIOMES[classify(c.temp, c.moist)];
+  }
+
+  return { at, climate, classify, BIOMES };
+})();
+</script>
+<script>
 /* Grove Clash — js/battle.js
    Battle: the battle scene. Replicates the reference composition:
    the active ally lower-left foreground (back to camera), MAGMULE
@@ -3371,6 +3554,8 @@ const Battle = (() => {
     THORNLET: [[1, 1, 1], [0.55, 0.95, 0.4], [0.3, 0.75, 0.3]],
     EMBERIK:  [[1, 1, 1], [1, 0.72, 0.2], [1, 0.48, 0.16]],
     MAGMULE:  [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
+    FROSTKIT: [[1, 1, 1], [0.7, 0.92, 1], [0.4, 0.7, 1]],
+    SANDREK:  [[1, 1, 1], [1, 0.78, 0.4], [0.85, 0.5, 0.2]],
     VORNETH:  [[1, 1, 1], [0.72, 0.34, 1], [0.5, 0.12, 0.7]],
     VORNETH_X:[[1, 1, 1], [0.92, 0.4, 1], [0.6, 0.15, 0.85]],
     PROTECTOR:[[1, 1, 1], [0.3, 0.85, 1], [0.15, 0.5, 0.8]],
@@ -5513,6 +5698,7 @@ const Overworld = (() => {
   let pendingAction = null;  // fn run when dialogue closes
   let cardT = 0, hintT = 0, t = 0;
   let fireflyT = 0, emberT = 0, swirlT = 0;
+  let curBiome = '', biomeName = 'WHISPER FOREST'; // current biome (for ambiance + card)
   let partyView = false, partyCheckCursor = 0; // C opens a read-only party check
   // O opens an options overlay (rename / difficulty / save / save codes)
   let optionsView = false, optMode = 'main', optCursor = 0, diffCursor = 2;
@@ -5544,17 +5730,16 @@ const Overworld = (() => {
   // so adjacent chunks tile without seams. Coarse hashed blotches = dirt.
   function chunkGround(cx, cz) {
     const step = 0.5, n = CHUNK / step, ox = cx * CHUNK, oz = cz * CHUNK;
-    const grassA = M3.hex('#3f6d3a'), grassB = M3.hex('#487c41'), grassC = M3.hex('#36602f');
-    const dirtA = M3.hex('#6b5238'), dirtB = M3.hex('#7a5f40');
     const data = new Float32Array(n * n * 6 * 9);
     let o = 0;
     for (let gz = 0; gz < n; gz++)
       for (let gx = 0; gx < n; gx++) {
         const wx = ox + gx * step, wz = oz + gz * step;
+        const gp = Biome.at(wx, wz).ground;     // per-quad biome -> seamless borders
         const cellX = Math.round(wx / step), cellZ = Math.round(wz / step);
         const h = hash2(cellX + 50000, cellZ + 50000) / 4294967296;
         const dirt = (hash2(Math.floor(wx / 3) + 9000, Math.floor(wz / 3) + 9000) / 4294967296) < 0.10;
-        const col = dirt ? (h < 0.5 ? dirtA : dirtB) : (h < 0.18 ? grassC : (h < 0.62 ? grassA : grassB));
+        const col = dirt ? gp.dirt[h < 0.5 ? 0 : 1] : gp.grass[h < 0.18 ? 2 : (h < 0.62 ? 0 : 1)];
         const jit = 0.94 + (h % 0.13);
         const r = col[0] * jit, g = col[1] * jit, b = col[2] * jit;
         const x1 = wx + step, z1 = wz + step;
@@ -5568,16 +5753,35 @@ const Overworld = (() => {
     return { data, count: n * n * 6 };
   }
 
-  function makeNpc(cx, cz, nx, nz, baseLv, count, rng) {
+  function makeNpc(cx, cz, nx, nz, baseLv, count, rng, pool) {
     const mi = Math.floor(rng() * NPC_MODELS.length);
+    const sp = (pool && pool.length) ? pool : WILD;
     const team = [];
     for (let i = 0; i < count; i++)
-      team.push({ species: WILD[Math.floor(rng() * WILD.length)],
+      team.push({ species: sp[Math.floor(rng() * sp.length)],
                   level: M3.clamp(baseLv + (i ? Math.floor(rng() * 3) - 1 : 0), 5, 55) });
     const name = TITLES[Math.floor(rng() * TITLES.length)] + ' ' + NAMES[Math.floor(rng() * NAMES.length)];
     return { key: ckey(cx, cz), name, model: NPC_MODELS[mi][0], battleModel: NPC_MODELS[mi][1],
              team, pos: [nx, 0, nz], yaw: Math.atan2(-nx, -nz), intro: INTRO[Math.floor(rng() * INTRO.length)],
              beaten: BEATEN[Math.floor(rng() * BEATEN.length)], h: null };
+  }
+
+  // pick a scenery prop from the biome's weighted scatter table (or null = open)
+  function scatterPick(biome, r) {
+    const u = r();
+    let acc = 0;
+    for (const [type, w] of biome.scatter) {
+      acc += w;
+      if (u < acc) {
+        if (type === 'tree') return { model: 'tree' + Math.floor(r() * 3), s: 0.95 + r() * 0.6, col: 0.55 };
+        if (type === 'rock') return { model: 'rock' + (r() < 0.5 ? 0 : 1), s: 0.85 + r() * 0.5, col: 0.85 };
+        if (type === 'bush') return { model: 'bush', s: 0.85 + r() * 0.5, col: 0.65 };
+        if (type === 'cactus') return { model: 'cactus', s: 0.9 + r() * 0.5, col: 0.5 };
+        if (type === 'ice_spike') return { model: 'ice_spike', s: 0.8 + r() * 0.7, col: 0.5 };
+        return { model: 'tuft', s: 0.8 + r() * 0.9, col: 0 };
+      }
+    }
+    return null;
   }
 
   function genChunk(cx, cz) {
@@ -5591,34 +5795,37 @@ const Overworld = (() => {
       Math.hypot(px - FIRE_POS[0], pz - FIRE_POS[2]) < rad ||
       Math.hypot(px - PORTAL_POS[0], pz - PORTAL_POS[2]) < rad;
 
-    // NPC first (so trees can keep clear of it). One per chunk at most.
+    // NPC first (so scenery can keep clear of it). One per chunk at most; its
+    // team is drawn from the BIOME's monster pool where it stands.
     let npc = null;
     const nr = chunkRng(cx, cz, 7);
     if (hasSpawn) {
-      npc = makeNpc(cx, cz, SPAWN[0] + 5, SPAWN[2] + 3.4, 10, 1, nr); // gentle starter
+      npc = makeNpc(cx, cz, SPAWN[0] + 5, SPAWN[2] + 3.4, 10, 1, nr, Biome.at(SPAWN[0] + 5, SPAWN[2] + 3.4).monsters);
     } else if (nr() < 0.12) {                                        // Minecraft-like density
       const nx = ox + 4 + nr() * (CHUNK - 8), nz = oz + 4 + nr() * (CHUNK - 8);
       if (!reserved(nx, nz, 5)) {
         const baseLv = M3.clamp(11 + Math.floor(ring * 1.4), 8, 45);
         const count = 1 + (ring > 2 ? 1 : 0) + (ring > 5 ? 1 : 0);
-        npc = makeNpc(cx, cz, nx, nz, baseLv, count, nr);
+        npc = makeNpc(cx, cz, nx, nz, baseLv, count, nr, Biome.at(nx, nz).monsters);
       }
     }
     if (npc) cols.push({ x: npc.pos[0], z: npc.pos[2], r: 0.55 });
 
-    // scenery on a jittered grid
+    // biome-aware scenery on a jittered grid (a chunk straddling two biomes
+    // blends naturally — each prop uses the biome at its own position)
     const r = chunkRng(cx, cz, 1);
     const CELL = 4;
     for (let lz = 0; lz < CHUNK; lz += CELL)
       for (let lx = 0; lx < CHUNK; lx += CELL) {
         const px = ox + lx + r() * CELL, pz = oz + lz + r() * CELL;
-        if (reserved(px, pz, 4)) { r(); r(); continue; }
-        if (npc && Math.hypot(px - npc.pos[0], pz - npc.pos[2]) < 2.2) { r(); r(); continue; }
-        const u = r(), s = 0.85 + r() * 0.6;
-        if (u < 0.40) { parts.push(['tree' + (Math.floor(r() * 3)), [px, 0, pz], r() * 6.3, s + 0.1]); cols.push({ x: px, z: pz, r: 0.55 * s }); }
-        else if (u < 0.50) { parts.push(['rock' + (r() < 0.5 ? 0 : 1), [px, 0, pz], r() * 6.3, s]); cols.push({ x: px, z: pz, r: 0.85 * s }); }
-        else if (u < 0.62) { parts.push(['bush', [px, 0, pz], r() * 6.3, s]); cols.push({ x: px, z: pz, r: 0.65 * s }); }
-        else if (u < 0.95) { parts.push(['tuft', [px, 0, pz], r() * 6.3, 0.8 + r() * 0.9]); }
+        const b = Biome.at(px, pz);
+        const pick = scatterPick(b, r);
+        const yaw = r() * 6.3;
+        if (!pick) continue;
+        if (reserved(px, pz, 4)) continue;
+        if (npc && Math.hypot(px - npc.pos[0], pz - npc.pos[2]) < 2.2) continue;
+        parts.push([pick.model, [px, 0, pz], yaw, pick.s, b.tint]);
+        if (pick.col > 0) cols.push({ x: px, z: pz, r: pick.col * pick.s });
       }
 
     if (hasFire) { parts.push(['campfire', FIRE_POS, 0.3, 1.15]); cols.push({ x: FIRE_POS[0], z: FIRE_POS[2], r: 0.8 }); }
@@ -5628,13 +5835,13 @@ const Overworld = (() => {
 
   function buildChunk(c) {
     const ground = chunkGround(c.cx, c.cz);
-    const ms = c.gen.parts.map(([n, pos, yaw, s]) => ({ m: Models.get(n), pos, yaw, s }));
+    const ms = c.gen.parts.map(([n, pos, yaw, s, tint]) => ({ m: Models.get(n), pos, yaw, s, tint }));
     let total = ground.count;
     for (const p of ms) total += p.m.count;
     const data = new Float32Array(total * 9);
     data.set(ground.data, 0);
     let off = ground.count * 9;
-    for (const p of ms) off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
+    for (const p of ms) off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s, p.tint);
     c.handle = Gfx.upload({ data, count: total });
   }
 
@@ -5672,6 +5879,16 @@ const Overworld = (() => {
     }
   }
 
+  // ease the sky / fog / light toward the player's current biome ambiance
+  function lerpEnv(target, k) {
+    M3.lerpV(ENV.sky, ENV.sky, M3.hex(target.sky), k);
+    M3.lerpV(ENV.fog, ENV.fog, M3.hex(target.fog), k);
+    M3.lerpV(ENV.lightCol, ENV.lightCol, target.light, k);
+    M3.lerpV(ENV.ambient, ENV.ambient, target.ambient, k);
+    ENV.fogNear += (target.fogNear - ENV.fogNear) * k;
+    ENV.fogFar += (target.fogFar - ENV.fogFar) * k;
+  }
+
   function enter(params) {
     params = params || {};
     Fx.clear();
@@ -5682,6 +5899,9 @@ const Overworld = (() => {
     else if (params.result === 'intro') { M3.set(hero.pos, SPAWN[0], 0, SPAWN[2]); }
     else if (params.result) { M3.set(hero.pos, 1.5, 0, 0.5); }
     streamChunks(-1);            // build the starting neighborhood immediately
+    const b0 = Biome.at(hero.pos[0], hero.pos[2]);
+    lerpEnv(b0.env, 1);          // snap ambiance to the spawn biome (no fade-in)
+    curBiome = b0.id; biomeName = b0.name;
     hero.yaw = Math.atan2(-hero.pos[0], -hero.pos[2]);
     camYaw = hero.yaw;
     Cam.cut([hero.pos[0] - Math.sin(camYaw) * 4.4, 2.3, hero.pos[2] - Math.cos(camYaw) * 4.4],
@@ -5896,6 +6116,12 @@ const Overworld = (() => {
 
     streamChunks();   // load/unload chunks around the player (budgeted)
 
+    // biome ambiance: ease sky/fog/light toward the biome under the player, and
+    // flash the biome name on the location card when crossing into a new one
+    const b = Biome.at(hero.pos[0], hero.pos[2]);
+    lerpEnv(b.env, M3.clamp(dt * 1.2, 0, 1));
+    if (b.id !== curBiome) { curBiome = b.id; biomeName = b.name; cardT = 3.2; }
+
     // atmosphere: fireflies drift around the player; embers + portal swirl near
     // their landmarks (only when the origin is in range)
     fireflyT -= dt;
@@ -5955,7 +6181,7 @@ const Overworld = (() => {
   function renderUi(ctx) {
     if (optionsView) { drawOptions(ctx); drawToast(ctx); return; }
     if (partyView) { UI.partyPanel(ctx, savePartyRows(), partyCheckCursor, t, false); return; }
-    if (cardT > 0) UI.locationCard(ctx, 'WHISPER WILDS', M3.clamp(cardT, 0, 1));
+    if (cardT > 0) UI.locationCard(ctx, biomeName, M3.clamp(cardT, 0, 1));
     if (hintT > 0) UI.hint(ctx, ['WASD/Arrows: Move', 'E: Talk   C: Party', 'O: Options   M: Mute']);
     drawToast(ctx);
     if (dialogue) { UI.msgBox(ctx, dialogue.tw, t, true); return; }

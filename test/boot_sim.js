@@ -12,7 +12,7 @@ const vm = require('vm');
 
 const root = path.join(__dirname, '..');
 const ORDER = ['math3d', 'input', 'audio', 'font', 'voxel', 'models', 'gfx',
-               'ui', 'fx', 'camera', 'battle_data', 'save', 'battle', 'overworld',
+               'ui', 'fx', 'camera', 'battle_data', 'save', 'biome', 'battle', 'overworld',
                'intro', 'story', 'titlemenu', 'nameentry', 'main'];
 
 let failures = 0;
@@ -519,6 +519,25 @@ const tap = (sb, code) => { press(sb, code); sb.__pump(2); };
   sb.__dispatch('keyup', { code: 'KeyA' });
   sb.__pump(20);
   ok(sb.__errors.length === 0, 'walking back regenerates chunks without errors' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
+// ------------------------------- run 17: biome-monster battle (new species)
+{
+  const sb = makeSandbox('#overworld');
+  vm.runInContext(`(${function () {
+    const realDmg = BData.damage;
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 50 : 1; return r; };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__be = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  vm.runInContext('__Game.toBattle({ arena:"grove", npcId:"42,7", enemy:{ team:[{species:"FROSTKIT",level:13},{species:"SANDREK",level:13}], trainer:"Ranger KAI", npcId:"42,7", trainerModel:"npc_hiker" } })', sb);
+  let frames = 0;
+  while (frames < 50000 && !vm.runInContext('globalThis.__be', sb)) { attackCycle(sb); frames += 40; }
+  ok(vm.runInContext('globalThis.__be', sb) === 'win', 'biome-monster battle (FROSTKIT/SANDREK + ICE moves) resolves (' + frames + ' frames)');
+  sb.__pump(150);
+  ok(sb.__errors.length === 0, 'no errors rendering the new biome monsters in battle' +
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
