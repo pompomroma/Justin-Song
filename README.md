@@ -11,11 +11,16 @@ landscape that streams in **16-unit chunks** around you. A low-frequency
 temperature/moisture noise field carves it into large, coherent **biomes**
 — **Whisper Forest**, **Open Prairie**, **Sunfall Desert**, **Frost Tundra**
 and **Golden Savanna** — each with its own ground, scenery (trees, cacti,
-ice spikes…), sky/light ambiance, and **monster pool**, so the wildlife
-changes as you cross from one to the next (e.g. **SANDREK** in the desert,
-the ICE-type **FROSTKIT** in the tundra). **Wandering trainers** spawn at a
-controlled density and get tougher the farther you go. Challenge them with
-your party of **PIXLIT**, **THORNLET** and **EMBERIK**, then return to the
+ice spikes…), sky/light ambiance, and **monster pool of distinctive species**
+(forest **MOSSOX**/**HOOTLE**, prairie **BUNDER**/**LARKIT**, desert
+**SCARABEX**/**COBRELL**/**SANDREK**, tundra **GLACIMP**/**PENGUL**/the
+ICE-type **FROSTKIT**, savanna **MANELEO**/**GRASSGAZ**), so the wildlife
+changes as you travel. **When a battle starts, the battlefield itself is
+dressed to match the biome you're standing in** — desert sand and cacti, snow
+and ice spikes, golden savanna grass, recolored sky and light. **Wandering
+trainers** spawn at a controlled density and get tougher the farther you go.
+Challenge them with your party of **PIXLIT**, **THORNLET** and **EMBERIK**,
+then return to the
 origin and step through the dark **rift portal** into an intimidating dungeon
 to face the boss, **VORNETH**. Expect dynamic camera swings, screen shake,
 hitstop, bullet-time, voxel particle storms and a classic text-driven turn

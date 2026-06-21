@@ -65,6 +65,16 @@ const Battle = (() => {
     MAGMULE:  [[1, 1, 1], [1, 0.85, 0.45], [1, 0.55, 0.2]],
     FROSTKIT: [[1, 1, 1], [0.7, 0.92, 1], [0.4, 0.7, 1]],
     SANDREK:  [[1, 1, 1], [1, 0.78, 0.4], [0.85, 0.5, 0.2]],
+    MOSSOX:   [[1, 1, 1], [0.5, 0.8, 0.35], [0.3, 0.55, 0.2]],
+    HOOTLE:   [[1, 1, 1], [0.7, 0.55, 0.95], [0.45, 0.3, 0.7]],
+    BUNDER:   [[1, 1, 1], [0.85, 0.6, 0.95], [0.6, 0.4, 0.8]],
+    LARKIT:   [[1, 1, 1], [0.6, 0.85, 0.4], [0.4, 0.65, 0.25]],
+    SCARABEX: [[1, 1, 1], [1, 0.6, 0.2], [0.8, 0.35, 0.1]],
+    COBRELL:  [[1, 1, 1], [1, 0.7, 0.3], [0.85, 0.45, 0.15]],
+    GLACIMP:  [[1, 1, 1], [0.7, 0.9, 1], [0.4, 0.7, 0.95]],
+    PENGUL:   [[1, 1, 1], [0.75, 0.92, 1], [0.45, 0.6, 0.85]],
+    MANELEO:  [[1, 1, 1], [1, 0.8, 0.35], [0.85, 0.5, 0.15]],
+    GRASSGAZ: [[1, 1, 1], [0.8, 0.85, 0.4], [0.6, 0.6, 0.25]],
     VORNETH:  [[1, 1, 1], [0.72, 0.34, 1], [0.5, 0.12, 0.7]],
     VORNETH_X:[[1, 1, 1], [0.92, 0.4, 1], [0.6, 0.15, 0.85]],
     PROTECTOR:[[1, 1, 1], [0.3, 0.85, 1], [0.15, 0.5, 0.8]],
@@ -1673,44 +1683,57 @@ const Battle = (() => {
   let rngLocal = M3.rng(99);
 
   // ----------------------------------------------------------- env build
-  function buildStatic() {
-    if (staticH) return;
+  // The grove arena is dressed to match the player's CURRENT biome: ground
+  // palette, scenery scatter + tint, and sky/light all come from the Biome
+  // module, so a desert encounter shows sand + cacti, an ice one snow + ice
+  // spikes, etc. Cached per biome; the trainer still stands on the slab.
+  const arenaCache = {};
+  function buildBiomeArena(biomeId) {
+    if (arenaCache[biomeId]) return arenaCache[biomeId];
+    const b = (Biome.BIOMES && (Biome.BIOMES[biomeId] || Biome.BIOMES.FOREST)) || null;
     const parts = [];
-    const push = (name, pos, yaw, s) => parts.push({ m: Models.get(name), pos, yaw, s });
-
+    const push = (name, pos, yaw, s, tint) => parts.push({ m: Models.get(name), pos, yaw, s, tint });
     const ground = Models.groundMesh({
       radius: 14.5,
       patches: [
         { x: P_POS[0], z: P_POS[2], rx: 1.15, rz: 0.85, rot: 0.35 },
         { x: M_POS[0], z: M_POS[2], rx: 1.45, rz: 1.0, rot: -0.18 },
       ],
+      palette: b ? b.ground : null,
     });
+    push('slab', [REX_POS[0], 0, REX_POS[2]], 0.4, 1.0);   // trainer perch (untinted)
 
+    const tint = b ? b.tint : [1, 1, 1];
+    const scatter = b ? b.scatter : [['tree', 0.4], ['rock', 0.1], ['bush', 0.12], ['tuft', 0.33]];
+    const pick = (r) => {
+      const u = r(); let acc = 0;
+      for (const [type, w] of scatter) {
+        acc += w;
+        if (u < acc) {
+          if (type === 'tree') return { model: 'tree' + Math.floor(r() * 3), s: 0.9 + r() * 0.5 };
+          if (type === 'rock') return { model: 'rock' + (r() < 0.5 ? 0 : 1), s: 0.85 + r() * 0.5 };
+          if (type === 'bush') return { model: 'bush', s: 0.85 + r() * 0.5 };
+          if (type === 'cactus') return { model: 'cactus', s: 0.9 + r() * 0.5 };
+          if (type === 'ice_spike') return { model: 'ice_spike', s: 0.8 + r() * 0.7 };
+          return { model: 'tuft', s: 0.8 + r() * 0.9 };
+        }
+      }
+      return null;
+    };
     const r = M3.rng(42);
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + r() * 0.3;
-      push('tree' + (i % 3), [Math.cos(a) * 9.5, 0, Math.sin(a) * 9.5], r() * 6.3, 0.85 + r() * 0.45);
+    for (let i = 0; i < 46; i++) {                 // a ring of biome scenery
+      const a = (i / 46) * Math.PI * 2 + r() * 0.5, rad = 8.5 + r() * 4.5;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad, p = pick(r), yaw = r() * 6.3;
+      if (p) push(p.model, [x, 0, z], yaw, p.s, tint);
     }
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2 + 0.18 + r() * 0.25;
-      push('tree' + ((i + 1) % 3), [Math.cos(a) * 12.2, 0, Math.sin(a) * 12.2], r() * 6.3, 1.05 + r() * 0.5);
-    }
-    push('slab', [REX_POS[0], 0, REX_POS[2]], 0.4, 1.0);
-    push('rock0', [3.9, 0, 4.7], 0.7, 1.25);
-    push('rock1', [2.0, 0, 5.1], 2.4, 0.9);
-    push('rock0', [5.0, 0, 3.5], 4.2, 0.8);
-    push('rock1', [-4.9, 0, 3.4], 1.1, 1.1);
-    push('bush', [-3.5, 0, 1.0], 0.5, 1.0);
-    push('bush', [4.6, 0, 0.3], 2.2, 0.9);
-    push('bush', [-2.6, 0, 4.6], 3.9, 1.15);
-    push('bush', [-4.2, 0, -2.5], 1.4, 1.0);
-    push('bush', [3.4, 0, -3.4], 5.1, 0.85);
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 50; i++) {                 // scattered ground detail, clear of actors
       const a = r() * Math.PI * 2, rad = 2.5 + r() * 5.5;
-      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad, p = pick(r), yaw = r() * 6.3;
+      if (!p) continue;
       if (Math.hypot(x - P_POS[0], z - P_POS[2]) < 1.8) continue;
       if (Math.hypot(x - M_POS[0], z - M_POS[2]) < 2.0) continue;
-      push('tuft', [x, 0, z], r() * 6.3, 0.8 + r() * 0.9);
+      if (Math.hypot(x - REX_POS[0], z - REX_POS[2]) < 1.6) continue;
+      push(p.model, [x, 0, z], yaw, p.s, tint);
     }
 
     let total = ground.count;
@@ -1719,8 +1742,13 @@ const Battle = (() => {
     data.set(ground.data, 0);
     let off = ground.count * 9;
     for (const p of parts)
-      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s);
-    staticH = Gfx.upload({ data, count: total });
+      off = M3.bakeMesh(data, off, p.m.data, p.m.count, p.pos, p.yaw, p.s, p.tint);
+    const handle = Gfx.upload({ data, count: total });
+    const env = b ? {
+      sky: M3.hex(b.env.sky), fog: M3.hex(b.env.fog), fogNear: 7.5, fogFar: 18,
+      lightDir: ENV.lightDir, lightCol: b.env.light, ambient: b.env.ambient,
+    } : ENV;
+    return (arenaCache[biomeId] = { handle, env });
   }
 
   // dark rift dungeon: obsidian floor, the boss's cliff, a looming portal
@@ -1801,7 +1829,7 @@ const Battle = (() => {
     tutorial = !!params.tutorial;
     if (arena === 'dungeon') { buildDungeon(); curStatic = dungeonH; curEnv = DUNGEON_ENV; defShot = DUNGEON_SHOT; }
     else if (arena === 'tutorial') { buildTutorial(); curStatic = tutorialH; curEnv = TUTORIAL_ENV; defShot = TUTORIAL_SHOT; }
-    else { buildStatic(); curStatic = staticH; curEnv = ENV; defShot = DEFAULT_SHOT; }
+    else { const a = buildBiomeArena(params.biome || 'FOREST'); curStatic = a.handle; curEnv = a.env; defShot = DEFAULT_SHOT; } // grove dressed to the player's biome
     ashT = 0.4; riftT = 1.2;
     if (typeof Game.setLetterbox === 'function') Game.setLetterbox(0, 5); // NORMAL screen during battle
 

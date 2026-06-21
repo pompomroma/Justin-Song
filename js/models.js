@@ -203,6 +203,185 @@ const Models = (() => {
     return { g, colors, s: 0.07, jitter: 0.07 };
   }
 
+  // ---- biome wild monsters (2 per biome) ----
+
+  // MOSSOX (forest, LEAF) — bulky mossy ox with stubby horns
+  function mossox() {
+    const g = Vox.grid(15, 14, 20);
+    const C = { hide: 0, belly: 1, moss: 2, horn: 3, eye: 4, hoof: 5 };
+    const colors = pal('#5a7a3a', '#6e8c48', '#3e6a2c', '#cfd8b0', '#2e2620', '#3a4a28');
+    for (const z of [4, 14]) { g.box(9, 0, z, 11, 4, z + 2, C.hide); g.box(9, 0, z, 11, 0, z + 2, C.hoof); }
+    g.box(4, 4, 4, 10, 9, 17, C.hide);
+    g.ellipsoid(7, 7, 4, 4, 3.4, 3.2, C.hide); g.ellipsoid(7, 7, 16, 4, 3.4, 3.4, C.hide);
+    for (let z = 5; z <= 16; z++) for (let x = 4; x <= 10; x++) if (g.get(x, 4, z)) g.set(x, 4, z, C.belly);
+    for (let z = 6; z <= 15; z += 2) { g.set(7, 9, z, C.moss); g.set(8, 9, z + 1, C.moss); }
+    g.box(5, 6, 17, 9, 10, 19, C.hide);          // head
+    g.set(8, 11, 18, C.horn); g.set(8, 12, 18, C.horn);  // horn (mirror)
+    g.set(8, 9, 19, C.eye);
+    g.set(6, 6, 19, C.belly);                    // muzzle
+    g.mirrorX();
+    return { g, colors, s: 0.072, jitter: 0.07 };
+  }
+
+  // HOOTLE (forest, PSY) — round-bodied owl with a facial disc and ear tufts
+  function hootle() {
+    const g = Vox.grid(13, 15, 11);
+    const C = { body: 0, belly: 1, face: 2, eye: 3, beak: 4, tuft: 5 };
+    const colors = pal('#6a5a8a', '#b0a0c8', '#d8d0e8', '#2e2620', '#ffd24a', '#4a3a6a');
+    g.ellipsoid(6, 7, 5, 4.4, 5, 4, C.body);
+    g.ellipsoid(6, 6, 7.5, 3.2, 3.6, 2.2, C.belly);
+    g.ellipsoid(6, 9, 7.6, 2.8, 2.6, 1.2, C.face);
+    g.set(5, 9, 9, C.eye); g.set(7, 9, 9, C.eye);
+    g.set(6, 8, 9, C.beak);
+    g.set(4, 13, 5, C.tuft); g.set(4, 14, 5, C.tuft);    // ear tufts (mirror)
+    g.box(1, 5, 4, 2, 10, 6, C.body);                    // folded wing (mirror)
+    g.set(4, 0, 6, C.beak); g.set(8, 0, 6, C.beak);      // feet
+    g.mirrorX();
+    return { g, colors, s: 0.06, jitter: 0.06 };
+  }
+
+  // BUNDER (prairie, PSY) — long-eared psychic hare with a forehead gem
+  function bunder() {
+    const g = Vox.grid(11, 17, 13);
+    const C = { fur: 0, belly: 1, ear: 2, eye: 3, gem: 4 };
+    const colors = pal('#c0b0d8', '#eee6f6', '#a890c8', '#2e2620', '#ff8fd0');
+    g.ellipsoid(5, 5, 6, 3.4, 3.6, 4, C.fur);
+    g.ellipsoid(5, 7, 8.5, 2.8, 3, 2.4, C.fur);
+    for (let z = 7; z <= 10; z++) for (let x = 3; x <= 7; x++) if (g.get(x, 3, z)) g.set(x, 3, z, C.belly);
+    g.box(6, 9, 7, 6, 15, 7, C.fur); g.box(6, 11, 7, 6, 15, 7, C.ear);   // ear (mirror)
+    g.set(6, 8, 10, C.eye);
+    g.set(5, 5, 10, C.gem);
+    g.box(3, 0, 8, 4, 1, 10, C.belly);                   // foot (mirror)
+    g.mirrorX();
+    g.set(4, 8, 10, C.eye); g.set(6, 8, 10, C.eye);
+    return { g, colors, s: 0.058, jitter: 0.06 };
+  }
+
+  // LARKIT (prairie, LEAF) — meadow bird with a leafy crest and tail
+  function larkit() {
+    const g = Vox.grid(12, 12, 15);
+    const C = { body: 0, belly: 1, wing: 2, beak: 3, eye: 4, crest: 5 };
+    const colors = pal('#7aa83e', '#d8e0a0', '#5e8a2e', '#e0a020', '#2e2620', '#b0d050');
+    g.ellipsoid(5.5, 5, 6, 3, 3.2, 4.2, C.body);
+    g.ellipsoid(5.5, 4.5, 9, 2.2, 2.4, 2.2, C.body);
+    for (let z = 4; z <= 8; z++) for (let x = 3; x <= 8; x++) if (g.get(x, 3, z)) g.set(x, 3, z, C.belly);
+    g.box(5, 6, 11, 6, 7, 12, C.beak);
+    g.set(7, 6, 11, C.eye);
+    g.set(5, 8, 9, C.crest); g.set(5, 9, 9, C.crest);
+    g.box(1, 4, 5, 2, 7, 8, C.wing);                     // wing (mirror)
+    g.box(5, 4, 1, 6, 5, 3, C.crest);                    // leafy tail
+    g.set(4, 0, 7, C.beak); g.set(7, 0, 7, C.beak);      // legs
+    g.mirrorX();
+    g.set(4, 6, 11, C.eye); g.set(7, 6, 11, C.eye);
+    return { g, colors, s: 0.055, jitter: 0.06 };
+  }
+
+  // SCARABEX (desert, FIRE) — fire scarab: domed shell, glowing seam, 6 legs
+  function scarabex() {
+    const g = Vox.grid(15, 10, 17);
+    const C = { shell: 0, shellD: 1, glow: 2, leg: 3, eye: 4, horn: 5 };
+    const colors = pal('#7a3a1a', '#5a2810', '#ff7a20', '#2e1c10', '#ffd24a', '#3a2010');
+    g.ellipsoid(7, 4, 8, 5.4, 3.6, 7, C.shell);
+    g.ellipsoid(7, 2.5, 8, 5, 2.4, 6.2, C.shellD);
+    for (let z = 2; z <= 14; z++) g.set(7, 7, z, C.glow);
+    g.box(5, 7, 8, 9, 7, 8, C.glow);
+    g.box(5, 3, 14, 9, 6, 16, C.shellD);                 // head
+    g.box(7, 6, 15, 7, 8, 16, C.horn); g.set(7, 9, 16, C.horn);
+    g.set(6, 5, 16, C.eye); g.set(8, 5, 16, C.eye);
+    for (const z of [5, 9, 12]) g.box(11, 0, z, 13, 1, z, C.leg);   // legs (mirror -> 6 total)
+    g.mirrorX();
+    return { g, colors, s: 0.062, jitter: 0.07 };
+  }
+
+  // COBRELL (desert, FIRE) — sand cobra: coiled base, raised hood, head
+  function cobrell() {
+    const g = Vox.grid(15, 16, 15);
+    const C = { scale: 0, belly: 1, hood: 2, eye: 3, fang: 4, glow: 5 };
+    const colors = pal('#c89a4a', '#e0c87a', '#a87a2e', '#2e2620', '#ffffff', '#ff7a20');
+    for (let a = 0; a < 16; a++) {
+      const ang = a / 16 * Math.PI * 2, rr = 4.2;
+      const x = Math.round(7 + Math.cos(ang) * rr), z = Math.round(7 + Math.sin(ang) * rr);
+      g.set(x, 0, z, C.scale); g.set(x, 1, z, C.scale);
+    }
+    for (let a = 0; a < 14; a++) { const ang = a / 14 * Math.PI * 2; g.set(Math.round(7 + Math.cos(ang) * 3), 2, Math.round(7 + Math.sin(ang) * 3), C.belly); }
+    g.box(6, 2, 7, 8, 9, 8, C.scale);                    // rising column
+    g.box(4, 7, 7, 10, 11, 8, C.hood);                   // hood
+    for (let y = 7; y <= 11; y++) { g.set(4, y, 8, C.glow); g.set(10, y, 8, C.glow); }
+    g.box(5, 8, 9, 9, 11, 10, C.scale);                  // head
+    g.set(5, 9, 11, C.eye); g.set(9, 9, 11, C.eye);
+    g.set(6, 8, 11, C.fang); g.set(8, 8, 11, C.fang);
+    return { g, colors, s: 0.06, jitter: 0.07 };
+  }
+
+  // GLACIMP (ice, ICE) — small icy imp with a crystal horn and back shard
+  function glacimp() {
+    const g = Vox.grid(11, 16, 9);
+    const C = { skin: 0, belly: 1, crystal: 2, eye: 3, claw: 4 };
+    const colors = pal('#7fb6d8', '#bfe0f0', '#dff4ff', '#1a2630', '#9fd0e8');
+    g.ellipsoid(5, 7, 4, 3, 4, 2.6, C.skin);
+    g.ellipsoid(5, 11, 4, 2.6, 2.4, 2.4, C.skin);
+    for (let z = 4; z <= 6; z++) for (let x = 3; x <= 7; x++) if (g.get(x, 6, z)) g.set(x, 6, z, C.belly);
+    g.box(7, 13, 4, 7, 15, 4, C.crystal);                // crystal horn (mirror)
+    g.box(8, 5, 4, 9, 8, 4, C.skin);                     // right arm (mirror)
+    g.box(6, 0, 3, 7, 2, 4, C.skin); g.set(6, 0, 3, C.claw); // right leg (mirror)
+    g.box(5, 8, 2, 5, 11, 2, C.crystal);                 // back shard
+    g.mirrorX();
+    g.set(4, 11, 6, C.eye); g.set(6, 11, 6, C.eye);
+    return { g, colors, s: 0.058, jitter: 0.06 };
+  }
+
+  // PENGUL (ice, ICE) — round penguin with flippers and an ice crown
+  function pengul() {
+    const g = Vox.grid(11, 15, 9);
+    const C = { body: 0, belly: 1, beak: 2, eye: 3, foot: 4, ice: 5 };
+    const colors = pal('#33384a', '#e8eef4', '#ffb020', '#1a1f2a', '#f0a020', '#bfe0f0');
+    g.ellipsoid(5, 6, 4, 3.4, 5.2, 3, C.body);
+    g.ellipsoid(5, 5.5, 5.4, 2.4, 4.2, 1.6, C.belly);
+    g.ellipsoid(5, 11.5, 4.4, 2.2, 2, 2, C.body);
+    g.set(4, 11, 6, C.eye); g.set(6, 11, 6, C.eye);
+    g.box(5, 10, 6, 5, 11, 7, C.beak);
+    g.box(1, 4, 4, 1, 9, 5, C.body);                     // flipper (mirror)
+    g.box(6, 0, 5, 7, 0, 7, C.foot);                     // foot (mirror)
+    g.set(5, 13, 4, C.ice);
+    g.mirrorX();
+    return { g, colors, s: 0.06, jitter: 0.05 };
+  }
+
+  // MANELEO (savanna, FIRE) — maned lion with a flame-tipped tail
+  function maneleo() {
+    const g = Vox.grid(15, 14, 20);
+    const C = { coat: 0, belly: 1, mane: 2, eye: 3, paw: 4, flame: 5 };
+    const colors = pal('#d89a3a', '#f0d090', '#9a5a1e', '#2e2620', '#7a4a18', '#ff7a20');
+    for (const z of [4, 14]) { g.box(9, 0, z, 11, 4, z + 2, C.coat); g.box(9, 0, z, 11, 0, z + 2, C.paw); }
+    g.box(4, 4, 4, 10, 9, 16, C.coat);
+    g.ellipsoid(7, 7, 4, 4, 3.2, 3, C.coat); g.ellipsoid(7, 7, 15, 4, 3.4, 3.4, C.coat);
+    for (let z = 5; z <= 15; z++) for (let x = 4; x <= 10; x++) if (g.get(x, 4, z)) g.set(x, 4, z, C.belly);
+    g.box(5, 6, 16, 9, 10, 19, C.coat);                  // head
+    for (let yy = 5; yy <= 11; yy++) for (let xx = 3; xx <= 11; xx++) { const dx = xx - 7, dy = yy - 8; if (Math.abs(dx * dx + dy * dy - 16) < 6) g.set(xx, yy, 16, C.mane); }
+    g.set(6, 8, 19, C.eye); g.set(8, 8, 19, C.eye);
+    g.set(7, 5, 19, C.belly);                            // muzzle
+    g.box(7, 4, 1, 7, 6, 2, C.coat); g.set(7, 7, 1, C.flame);  // flame tail
+    g.mirrorX();
+    return { g, colors, s: 0.072, jitter: 0.07 };
+  }
+
+  // GRASSGAZ (savanna, LEAF) — slender gazelle with leafy horns
+  function grassgaz() {
+    const g = Vox.grid(13, 18, 18);
+    const C = { hide: 0, belly: 1, horn: 2, eye: 3, hoof: 4, leaf: 5 };
+    const colors = pal('#a8a850', '#e0e0a8', '#7a6a30', '#2e2620', '#4a3a1e', '#8cc85a');
+    for (const z of [4, 13]) { g.box(8, 0, z, 9, 7, z + 1, C.hide); g.box(8, 0, z, 9, 0, z + 1, C.hoof); }
+    g.box(4, 7, 4, 8, 11, 15, C.hide);
+    g.ellipsoid(6, 9, 4, 3, 2.6, 2.6, C.hide); g.ellipsoid(6, 9, 15, 3, 2.6, 2.8, C.hide);
+    for (let z = 5; z <= 14; z++) for (let x = 4; x <= 8; x++) if (g.get(x, 7, z)) g.set(x, 7, z, C.belly);
+    g.box(6, 11, 14, 7, 15, 16, C.hide);                 // neck
+    g.box(6, 15, 15, 7, 16, 17, C.hide);                 // head
+    g.set(7, 15, 17, C.eye);
+    g.box(7, 16, 15, 7, 17, 15, C.horn); g.set(7, 17, 16, C.leaf); // leafy horn (mirror)
+    g.mirrorX();
+    return { g, colors, s: 0.07, jitter: 0.07 };
+  }
+
   // Voxball — the capture ball (red top, white bottom, dark band).
   function ball() {
     const g = Vox.grid(7, 7, 7);
@@ -608,8 +787,12 @@ const Models = (() => {
     const step = 0.5;
     const patches = opts.patches || [];
     const dark = !!opts.dark; // dungeon obsidian floor vs. grove grass
-    const grassA = M3.hex(dark ? '#2e2450' : '#3f6d3a'), grassB = M3.hex(dark ? '#392c60' : '#487c41'), grassC = M3.hex(dark ? '#241c40' : '#36602f');
-    const dirtA = M3.hex(dark ? '#46386c' : '#6b5238'), dirtB = M3.hex(dark ? '#544284' : '#7a5f40');
+    const P = opts.palette;   // {grass:[3 rgb], dirt:[2 rgb]} — biome battle floor override
+    const grassA = P ? P.grass[0] : M3.hex(dark ? '#2e2450' : '#3f6d3a');
+    const grassB = P ? P.grass[1] : M3.hex(dark ? '#392c60' : '#487c41');
+    const grassC = P ? P.grass[2] : M3.hex(dark ? '#241c40' : '#36602f');
+    const dirtA = P ? P.dirt[0] : M3.hex(dark ? '#46386c' : '#6b5238');
+    const dirtB = P ? P.dirt[1] : M3.hex(dark ? '#544284' : '#7a5f40');
     const n = Math.ceil(radius / step);
     const quads = [];
     for (let gz = -n; gz < n; gz++)
@@ -655,7 +838,9 @@ const Models = (() => {
   // ================================================================= cache
 
   const BUILDERS = {
-    pixlit, magmule, thornlet, emberik, frostkit, sandrek, ball, hero, rex_idle, rex_raised,
+    pixlit, magmule, thornlet, emberik, frostkit, sandrek,
+    mossox, hootle, bunder, larkit, scarabex, cobrell, glacimp, pengul, maneleo, grassgaz,
+    ball, hero, rex_idle, rex_raised,
     vorneth, vorneth_x, protector, giant, portal, cliff, spire, cactus, ice_spike,
     npc_hiker, npc_lass, npc_ace,
     tree0: () => tree(0), tree1: () => tree(1), tree2: () => tree(2),

@@ -20,6 +20,27 @@ const BData = (() => {
                 moves: ['TACKLE', 'GROWL', 'FROSTBITE', 'ICESHARD'] },   // tundra
     SANDREK:  { name: 'SANDREK',  type: 'FIRE', base: { hp: 58, atk: 70, def: 66, spe: 30 },
                 moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // desert
+    // two signature wild monsters per biome
+    MOSSOX:   { name: 'MOSSOX',   type: 'LEAF', base: { hp: 64, atk: 62, def: 70, spe: 30 },
+                moves: ['TACKLE', 'GROWL', 'LEAFRAZOR', 'SEEDBURST'] },  // forest
+    HOOTLE:   { name: 'HOOTLE',   type: 'PSY',  base: { hp: 46, atk: 62, def: 52, spe: 60 },
+                moves: ['TACKLE', 'GROWL', 'MINDBEAM', 'PSYBLAST'] },    // forest
+    BUNDER:   { name: 'BUNDER',   type: 'PSY',  base: { hp: 48, atk: 58, def: 50, spe: 66 },
+                moves: ['TACKLE', 'GROWL', 'MINDBEAM', 'PSYBLAST'] },    // prairie
+    LARKIT:   { name: 'LARKIT',   type: 'LEAF', base: { hp: 44, atk: 60, def: 46, spe: 64 },
+                moves: ['TACKLE', 'GROWL', 'LEAFRAZOR', 'SEEDBURST'] },  // prairie
+    SCARABEX: { name: 'SCARABEX', type: 'FIRE', base: { hp: 52, atk: 66, def: 72, spe: 36 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // desert
+    COBRELL:  { name: 'COBRELL',  type: 'FIRE', base: { hp: 50, atk: 74, def: 52, spe: 58 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // desert
+    GLACIMP:  { name: 'GLACIMP',  type: 'ICE',  base: { hp: 46, atk: 66, def: 50, spe: 56 },
+                moves: ['TACKLE', 'GROWL', 'FROSTBITE', 'ICESHARD'] },   // ice
+    PENGUL:   { name: 'PENGUL',   type: 'ICE',  base: { hp: 58, atk: 58, def: 62, spe: 40 },
+                moves: ['TACKLE', 'GROWL', 'FROSTBITE', 'ICESHARD'] },   // ice
+    MANELEO:  { name: 'MANELEO',  type: 'FIRE', base: { hp: 60, atk: 78, def: 58, spe: 54 },
+                moves: ['TACKLE', 'GROWL', 'CINDER', 'SCORCH'] },        // savanna
+    GRASSGAZ: { name: 'GRASSGAZ', type: 'LEAF', base: { hp: 50, atk: 64, def: 50, spe: 70 },
+                moves: ['TACKLE', 'GROWL', 'LEAFRAZOR', 'SEEDBURST'] },  // savanna
     // Dungeon boss — two forms. AWAKEN (a transform move) morphs VORNETH
     // into its true form mid-battle; statsFor() resolves each form's block.
     VORNETH:   { name: 'VORNETH', type: 'VOID', base: { hp: 80, atk: 60, def: 60, spe: 50 },

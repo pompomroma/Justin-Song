@@ -287,6 +287,16 @@ const near = (a, b, eps) => Math.abs(a - b) <= (eps || 1e-4);
      'biome monster pools reference real species');
   ok(!!BData.SPECIES.FROSTKIT && BData.SPECIES.FROSTKIT.type === 'ICE' && !!BData.SPECIES.SANDREK,
      'new biome monsters exist (FROSTKIT is ICE-type)');
+
+  // every pool species has both a voxel model and battle stats
+  const modelSet = new Set(Models.list());
+  ok(ids.every((k) => Biome.BIOMES[k].monsters.every((s) => modelSet.has(s.toLowerCase()) && !!BData.SPECIES[s])),
+     'every biome monster has a model + stats');
+  // each biome fields its 2 signature newcomers
+  const NEW = { FOREST: ['MOSSOX', 'HOOTLE'], PRAIRIE: ['BUNDER', 'LARKIT'], DESERT: ['SCARABEX', 'COBRELL'],
+                ICE: ['GLACIMP', 'PENGUL'], SAVANNA: ['MANELEO', 'GRASSGAZ'] };
+  ok(Object.keys(NEW).every((k) => NEW[k].every((s) => Biome.BIOMES[k].monsters.indexOf(s) >= 0)),
+     'each biome pool includes its 2 new monsters');
 }
 
 // --------------------------------------------------- Monte-Carlo balance

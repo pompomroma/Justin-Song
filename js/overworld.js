@@ -301,7 +301,7 @@ const Overworld = (() => {
       startDialogue([n.name + ': ' + n.beaten], null);      // already beaten: just chat
     } else {
       startDialogue([n.name + ' wants to battle!', n.name + ': ' + n.intro], () =>
-        Game.toBattle({ arena: 'grove', npcId: n.key,
+        Game.toBattle({ arena: 'grove', npcId: n.key, biome: curBiome,   // battlefield matches the player's biome
           enemy: { team: n.team.map((m) => ({ species: m.species, level: m.level })), trainer: n.name, npcId: n.key, trainerModel: n.battleModel } }));
     }
   }

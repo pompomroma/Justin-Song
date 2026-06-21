@@ -45,7 +45,7 @@ const Biome = (() => {
       ground: { grass: [hex('#3f6d3a'), hex('#487c41'), hex('#36602f')], dirt: [hex('#6b5238'), hex('#7a5f40')] },
       scatter: [['tree', 0.40], ['rock', 0.10], ['bush', 0.12], ['tuft', 0.33]],
       tint: [1, 1, 1],
-      monsters: ['THORNLET', 'PIXLIT', 'EMBERIK'],
+      monsters: ['MOSSOX', 'HOOTLE', 'THORNLET', 'PIXLIT'],
       env: { sky: '#152238', fog: '#16261e', fogNear: 12, fogFar: 30, light: [0.82, 0.72, 0.58], ambient: [0.46, 0.52, 0.48] },
     },
     PRAIRIE: {
@@ -53,7 +53,7 @@ const Biome = (() => {
       ground: { grass: [hex('#6a8e3a'), hex('#7a9a44'), hex('#5e8232')], dirt: [hex('#8a6f44'), hex('#9a7d4e')] },
       scatter: [['tree', 0.06], ['rock', 0.07], ['bush', 0.05], ['tuft', 0.55]],
       tint: [1.05, 1.05, 0.85],
-      monsters: ['THORNLET', 'PIXLIT', 'MAGMULE'],
+      monsters: ['BUNDER', 'LARKIT', 'PIXLIT', 'THORNLET'],
       env: { sky: '#243650', fog: '#2c4030', fogNear: 14, fogFar: 34, light: [0.92, 0.86, 0.66], ambient: [0.54, 0.58, 0.5] },
     },
     DESERT: {
@@ -61,7 +61,7 @@ const Biome = (() => {
       ground: { grass: [hex('#d8c078'), hex('#cab062'), hex('#e0c884')], dirt: [hex('#b89a4a'), hex('#a88a3e')] },
       scatter: [['cactus', 0.13], ['rock', 0.10], ['bush', 0.05], ['tuft', 0.05]],
       tint: [1.15, 1.0, 0.7],
-      monsters: ['MAGMULE', 'EMBERIK', 'SANDREK'],
+      monsters: ['SANDREK', 'SCARABEX', 'COBRELL', 'MAGMULE'],
       env: { sky: '#43381f', fog: '#6a5a3a', fogNear: 14, fogFar: 38, light: [1.0, 0.86, 0.6], ambient: [0.6, 0.54, 0.44] },
     },
     ICE: {
@@ -69,7 +69,7 @@ const Biome = (() => {
       ground: { grass: [hex('#dfe8f0'), hex('#cfdae8'), hex('#c2d0e2')], dirt: [hex('#aebfd4'), hex('#9fb2c8')] },
       scatter: [['ice_spike', 0.12], ['rock', 0.09], ['tuft', 0.05]],
       tint: [0.85, 0.95, 1.15],
-      monsters: ['FROSTKIT', 'PIXLIT', 'FROSTKIT'],
+      monsters: ['FROSTKIT', 'GLACIMP', 'PENGUL', 'PIXLIT'],
       env: { sky: '#5a6a86', fog: '#a6b6c8', fogNear: 13, fogFar: 32, light: [0.85, 0.9, 1.0], ambient: [0.6, 0.64, 0.7] },
     },
     SAVANNA: {
@@ -77,7 +77,7 @@ const Biome = (() => {
       ground: { grass: [hex('#9a9440'), hex('#8a8636'), hex('#a8a04e')], dirt: [hex('#8a6f3a'), hex('#7a6332')] },
       scatter: [['tree', 0.10], ['rock', 0.12], ['bush', 0.04], ['tuft', 0.42]],
       tint: [1.2, 1.05, 0.6],
-      monsters: ['MAGMULE', 'EMBERIK', 'THORNLET'],
+      monsters: ['MANELEO', 'GRASSGAZ', 'MAGMULE', 'EMBERIK'],
       env: { sky: '#43402c', fog: '#5a4e2e', fogNear: 14, fogFar: 36, light: [1.0, 0.9, 0.62], ambient: [0.58, 0.56, 0.46] },
     },
   };

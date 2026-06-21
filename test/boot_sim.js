@@ -541,5 +541,31 @@ const tap = (sb, code) => { press(sb, code); sb.__pump(2); };
      (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
 }
 
+// ------------------------------- run 18: biome-matched battlefields
+{
+  const sb = makeSandbox('#overworld');
+  vm.runInContext(`(${function () {
+    const realDmg = BData.damage;     // player crushes (lvl<=12); the lvl-14 foes only chip
+    BData.damage = (att, def, move, rng) => { const r = realDmg(att, def, move, rng); if (!r.miss && move.power) r.dmg = att.level <= 12 ? 60 : 1; return r; };
+    const orig = Game.onBattleEnd;
+    Game.onBattleEnd = (r, e) => { globalThis.__be = r; orig(r, e); };
+  }.toString()})()`, sb);
+  sb.__pump(5);
+  const fight = (biome, team) => {
+    vm.runInContext('globalThis.__be = null', sb);
+    vm.runInContext('__Game.toBattle({ arena:"grove", biome:"' + biome + '", npcId:"9,9", enemy:{ team:' + JSON.stringify(team) + ', trainer:"Nomad VEX", npcId:"9,9", trainerModel:"npc_lass" } })', sb);
+    let f = 0;
+    while (f < 50000 && !vm.runInContext('globalThis.__be', sb)) { attackCycle(sb); f += 40; }
+    return vm.runInContext('globalThis.__be', sb);
+  };
+  const desert = fight('DESERT', [{ species: 'SCARABEX', level: 14 }, { species: 'COBRELL', level: 14 }]);
+  sb.__pump(140);
+  const ice = fight('ICE', [{ species: 'GLACIMP', level: 14 }, { species: 'PENGUL', level: 14 }]);
+  sb.__pump(140);
+  ok(desert === 'win' && ice === 'win', 'biome-matched battles win (desert=' + desert + ', ice=' + ice + ')');
+  ok(sb.__errors.length === 0, 'no errors building biome battlefields + the new monsters' +
+     (sb.__errors.length ? ': ' + sb.__errors[0].slice(0, 200) : ''));
+}
+
 console.log(failures ? '\nBOOT SIM FAILED' : '\nBOOT SIM PASSED');
 process.exit(failures ? 1 : 0);
